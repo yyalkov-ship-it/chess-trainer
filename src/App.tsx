@@ -9,7 +9,7 @@ import '@lichess-org/chessground/assets/chessground.cburnett.css'
 import { games } from './content/games'
 import type { Game, Moment } from './content/types'
 import { addMistake, loadStore, registerStudyDay, reviewMistake, saveProgress, type MistakeTask } from './storage'
-import { engine, humanEvaluation, uciToMove } from './engine'
+import { engine, heroEvaluation, humanEvaluation, uciToMove } from './engine'
 
 type Screen = { name: 'home' } | { name: 'intro'; game: Game } | { name: 'lesson'; game: Game } | { name: 'result'; game: Game } | { name: 'drills'; game: Game } | { name: 'mistakes' }
 
@@ -25,12 +25,14 @@ function gamePlyCount(game: Game) {
   return chess.history().length
 }
 
-function Board({ chess, movable, onMove, flash }: { chess: Chess; movable: boolean; onMove: (from: Key, to: Key) => void; flash: 'right' | 'wrong' | null }) {
+type BoardProps = { chess: Chess; movable: boolean; onMove: (from: Key, to: Key) => void; flash: 'right' | 'wrong' | null; orientation?: 'white' | 'black'; lastMove?: Key[]; moment?: Moment }
+
+function Board({ chess, movable, onMove, flash, orientation = 'white', lastMove, moment }: BoardProps) {
   const ref = useRef<HTMLDivElement>(null)
   const api = useRef<Api | null>(null)
   useEffect(() => {
     if (!ref.current) return
-    api.current = Chessground(ref.current, { orientation: 'white', animation: { enabled: true, duration: 180 } })
+    api.current = Chessground(ref.current, { orientation, animation: { enabled: true, duration: 180 } })
     return () => api.current?.destroy()
   }, [])
   useEffect(() => {
@@ -43,20 +45,26 @@ function Board({ chess, movable, onMove, flash }: { chess: Chess; movable: boole
     }
     api.current?.set({
       fen: chess.fen(),
+      orientation,
       turnColor: chess.turn() === 'w' ? 'white' : 'black',
       movable: { color: movable ? (chess.turn() === 'w' ? 'white' : 'black') : undefined, dests, events: { after: onMove } },
-      lastMove: undefined,
+      lastMove,
       highlight: { lastMove: true, check: true },
+      drawable: { autoShapes: [
+        ...(moment?.arrows ?? []).map((arrow) => ({ orig: arrow.from as Key, dest: arrow.to as Key, brush: arrow.color })),
+        ...(moment?.highlight ?? []).map((square) => ({ orig: square as Key, brush: 'blue' })),
+      ] },
     })
-  }, [chess, movable, onMove])
+  }, [chess, movable, onMove, orientation, lastMove, moment])
   return <div className={`board-wrap ${flash ? `flash-${flash}` : ''}`}><div ref={ref} className="cg-board-host" /></div>
 }
 
-function PlayMode({ initialFen, onExit }: { initialFen: string; onExit: () => void }) {
+function PlayMode({ initialFen, heroColor, onExit }: { initialFen: string; heroColor: 'w' | 'b'; onExit: () => void }) {
   const [chess, setChess] = useState(() => new Chess(initialFen))
   const [level, setLevel] = useState<1200 | 1500 | 1800>(1200)
   const [thinking, setThinking] = useState(false)
-  const [message, setMessage] = useState('Ты играешь белыми. Сделай ход.')
+  const heroName = heroColor === 'w' ? 'белыми' : 'чёрными'
+  const [message, setMessage] = useState(`Ты играешь ${heroName}. Сделай ход.`)
   const [evaluation, setEvaluation] = useState(0)
   const history = useRef<string[]>([initialFen])
 
@@ -69,7 +77,7 @@ function PlayMode({ initialFen, onExit }: { initialFen: string; onExit: () => vo
   }
 
   const onMove = async (from: Key, to: Key) => {
-    if (thinking || chess.turn() !== 'w' || chess.isGameOver()) return
+    if (thinking || chess.turn() !== heroColor || chess.isGameOver()) return
     const next = new Chess(chess.fen())
     if (!next.move({ from, to, promotion: 'q' })) return
     history.current.push(next.fen())
@@ -104,7 +112,7 @@ function PlayMode({ initialFen, onExit }: { initialFen: string; onExit: () => vo
   return <main className="lesson-shell">
     <header className="lesson-top"><button className="back" onClick={onExit}>← К разбору</button><span>Игра с компьютером</span><strong>{level} Эло</strong></header>
     <div className="eval-track" aria-label="Оценка позиции"><span style={{ width: `${whiteShare}%` }} /></div>
-    <Board chess={chess} movable={!thinking && chess.turn() === 'w' && !chess.isGameOver()} onMove={onMove} flash={null} />
+    <Board chess={chess} orientation={heroColor === 'w' ? 'white' : 'black'} movable={!thinking && chess.turn() === heroColor && !chess.isGameOver()} onMove={onMove} flash={null} />
     <section className="coach-card play-card">
       <span className="eyebrow">Доигрывание</span><h2>{message}</h2>
       <label>Сила соперника<select value={level} disabled={thinking} onChange={(event) => setLevel(Number(event.target.value) as 1200 | 1500 | 1800)}><option value={1200}>1200</option><option value={1500}>1500</option><option value={1800}>1800</option></select></label>
@@ -129,6 +137,12 @@ function Lesson({ game, onExit, onComplete }: { game: Game; onExit: () => void; 
   const chess = useMemo(() => positionAt(history, ply), [history, ply])
   const moment = game.moments.find((item) => item.ply === ply)
   const mustFind = moment?.kind === 'find' && !solved.includes(ply)
+  const lastMove = useMemo(() => {
+    if (ply === 0) return undefined
+    const previous = positionAt(history, ply - 1)
+    const move = previous.move(history[ply - 1])
+    return move ? [move.from as Key, move.to as Key] : undefined
+  }, [history, ply])
 
   useEffect(() => { saveProgress({ gameId: game.id, currentPly: ply, score, startedAt: startedAt.current, solved, mistakes }) }, [game.id, ply, score, solved, mistakes])
   useEffect(() => { setAttempts(0); setFeedback(null); setFlash(null) }, [ply])
@@ -145,6 +159,7 @@ function Lesson({ game, onExit, onComplete }: { game: Game; onExit: () => void; 
     if (!move) return
     const accepted = [moment.answerSan, ...(moment.altAcceptable ?? [])].includes(move.san)
     if (accepted) {
+      registerStudyDay()
       const gained = Math.max(1, 3 - attempts)
       setScore((value) => value + gained)
       blink('right')
@@ -169,9 +184,13 @@ function Lesson({ game, onExit, onComplete }: { game: Game; onExit: () => void; 
         try {
           const before = await engine.evaluate(chess.fen(), 700)
           const after = await engine.evaluate(trial.fen(), 900)
+          const beforeForHero = heroEvaluation(before, chess.fen(), game.heroColor)
+          const afterForHero = heroEvaluation(after, trial.fen(), game.heroColor)
+          const change = afterForHero - beforeForHero
           const reply = new Chess(trial.fen())
           const best = reply.move(uciToMove(after.bestMove))
-          setFeedback(`До хода: ${humanEvaluation(before.centipawns)}. После твоего хода: ${humanEvaluation(after.centipawns)}. Лучший ответ соперника — ${best?.san ?? after.bestMove}. ${moment.hints[nextAttempt - 1]}`)
+          const verdict = change < -50 ? `Стало хуже на ${(Math.abs(change) / 100).toFixed(1)} пешки.` : change > 50 ? `Стало лучше на ${(change / 100).toFixed(1)} пешки.` : 'Оценка почти не изменилась.'
+          setFeedback(`До хода: ${humanEvaluation(beforeForHero)}. После твоего хода: ${humanEvaluation(afterForHero)}. ${verdict} Лучший ответ соперника — ${best?.san ?? after.bestMove}. ${moment.hints[nextAttempt - 1]}`)
         } catch {
           setFeedback(`${moment.hints[nextAttempt - 1]} Движок сейчас недоступен, но можно продолжать урок.`)
         } finally { setEngineBusy(false) }
@@ -195,10 +214,10 @@ function Lesson({ game, onExit, onComplete }: { game: Game; onExit: () => void; 
   }
   const visibleFeedback = feedback ?? (moment?.kind === 'explain' ? moment.explanation : null)
 
-  if (playFen) return <PlayMode initialFen={playFen} onExit={() => setPlayFen(null)} />
+  if (playFen) return <PlayMode initialFen={playFen} heroColor={game.heroColor} onExit={() => setPlayFen(null)} />
   return <main className="lesson-shell">
     <header className="lesson-top"><button className="back" onClick={onExit}>← Выйти</button><span>{ply}/{history.length}</span><strong>{score} очков</strong></header>
-    <Board chess={chess} movable={Boolean(mustFind)} onMove={onMove} flash={flash} />
+    <Board chess={chess} orientation={game.heroColor === 'w' ? 'white' : 'black'} movable={Boolean(mustFind)} onMove={onMove} flash={flash} lastMove={lastMove} moment={moment} />
     <section className="coach-card">
       <span className="eyebrow">{mustFind ? `Твоя очередь · попытка ${attempts + 1} из 3` : moment ? 'Разбор позиции' : 'Ходы партии'}</span>
       <h2>{mustFind ? moment?.prompt : moment?.prompt ?? 'Следи, как развивается партия'}</h2>
@@ -233,7 +252,7 @@ function PuzzleBoard({ fen, prompt, answerSan, explanation, onDone }: { fen: str
     setFinished(true)
     onDone(correct)
   }
-  return <><Board chess={chess} movable={!finished} onMove={onMove} flash={finished ? (feedback?.startsWith('Верно') ? 'right' : 'wrong') : null} /><section className="coach-card"><span className="eyebrow">Найди ход</span><h2>{prompt}</h2>{feedback ? <p className="feedback">{feedback}</p> : <p>Сделай ход на доске.</p>}</section></>
+  return <><Board chess={chess} orientation={chess.turn() === 'w' ? 'white' : 'black'} movable={!finished} onMove={onMove} flash={finished ? (feedback?.startsWith('Верно') ? 'right' : 'wrong') : null} /><section className="coach-card"><span className="eyebrow">Найди ход</span><h2>{prompt}</h2>{feedback ? <p className="feedback">{feedback}</p> : <p>Сделай ход на доске.</p>}</section></>
 }
 
 function Drills({ game, onExit }: { game: Game; onExit: () => void }) {
@@ -269,6 +288,6 @@ export function App() {
   if (screen.name === 'drills') return <Drills game={screen.game} onExit={() => setScreen({ name: 'home' })} />
   if (screen.name === 'mistakes') return <Mistakes onExit={() => setScreen({ name: 'home' })} />
   if (screen.name === 'intro') return <main className="shell"><button className="back" onClick={() => setScreen({ name: 'home' })}>← На главную</button><section className="hero intro"><span className="eyebrow">Урок · {screen.game.opening}</span><h1>{screen.game.title}</h1><p>{screen.game.intro}</p><div className="lesson-facts"><span>{screen.game.moments.filter((item) => item.kind === 'find').length} ходов для поиска</span><span>{screen.game.moments.length} разборов</span><span>{screen.game.drills.length} упражнений</span></div><button className="primary" onClick={() => setScreen({ name: 'lesson', game: screen.game })}>Начать урок</button></section></main>
-  const mistakeCount = Object.keys(store.mistakes).length
+  const mistakeCount = Object.values(store.mistakes).filter((task) => task.dueAt <= Date.now()).length
   return <main className="shell"><header className="topbar"><span className="mark">♞</span><span>Шахматный тренер</span><span className="streak">🔥 {store.streak.count}</span></header><section className="hero"><span className="eyebrow">Классические партии</span><h1>Думай как чемпион</h1><p>Находи сильные ходы сам, разбирай ошибки и доигрывай позиции против компьютера.</p></section><section aria-labelledby="lessons-title"><div className="section-title"><h2 id="lessons-title">Твои уроки</h2><span>{games.length} партия</span></div><div className="game-list">{games.map((game, index) => { const progress = store.progress[game.id]; const totalPly = gamePlyCount(game); return <button key={game.id} className="game-card" onClick={() => setScreen({ name: 'intro', game })}><span className="game-number">{String(index + 1).padStart(2, '0')}</span><span className="game-copy"><strong>{game.title}</strong><small>{progress?.completedAt ? 'Пройдено' : progress ? 'В процессе' : `${game.opening} · уровень ${game.level}`}</small></span><span className="arrow">→</span><span className="progress-track"><span style={{ width: `${progress ? Math.round(progress.currentPly / totalPly * 100) : 0}%` }} /></span></button> })}</div></section><button className="mistakes" onClick={() => setScreen({ name: 'mistakes' })}><span>Работа над ошибками {mistakeCount ? `· ${mistakeCount}` : ''}</span><small>{mistakeCount ? 'Повтори позиции, где было трудно' : 'Здесь появятся позиции, в которых ты ошибся'}</small></button></main>
 }

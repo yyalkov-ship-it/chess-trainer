@@ -19,6 +19,7 @@ export type Game = {
   title: string
   opening: string
   result: string
+  heroColor: 'w' | 'b'
   level: 1 | 2 | 3
   intro: string
   pgn: string

@@ -6,8 +6,18 @@ import type { Game } from '../src/content/types'
 const directory = resolve('src/content/games')
 const files = readdirSync(directory).filter((name) => name.endsWith('.json')).sort()
 if (!files.length) throw new Error('В src/content/games нет партий')
-
-for (const file of files) validate(JSON.parse(readFileSync(resolve(directory, file), 'utf8')) as Game)
+const games = files.map((file) => JSON.parse(readFileSync(resolve(directory, file), 'utf8')) as Game)
+const positionKey = (fen: string) => fen.split(' ').slice(0, 4).join(' ')
+const studyPositions = new Set<string>()
+for (const game of games) {
+  const chess = new Chess()
+  chess.loadPgn(game.pgn)
+  const history = chess.history()
+  const replay = new Chess()
+  studyPositions.add(positionKey(replay.fen()))
+  for (const san of history) { replay.move(san); studyPositions.add(positionKey(replay.fen())) }
+}
+for (const game of games) validate(game)
 
 function validate(game: Game) {
   const fail = (message: string): never => { throw new Error(`Контент ${game.id}: ${message}`) }
@@ -19,6 +29,7 @@ function validate(game: Game) {
   const main = loadPgn()
   const history = main.history()
   if (!history.length) fail('PGN не содержит ходов')
+  if (game.heroColor !== 'w' && game.heroColor !== 'b') fail('heroColor должен быть w или b')
   const positionBefore = (ply: number) => {
     if (!Number.isInteger(ply) || ply < 0 || ply >= history.length) fail(`ply ${ply} вне партии из ${history.length} полуходов`)
     const chess = new Chess()
@@ -34,7 +45,11 @@ function validate(game: Game) {
     if (moment.ply <= previousPly) fail(`моменты должны идти по возрастанию ply (индекс ${index})`)
     previousPly = moment.ply
     const position = positionBefore(moment.ply)
-    assertLegal(new Chess(position.fen()), moment.answerSan, `момент ${index + 1}, ответ`)
+    const answerPosition = new Chess(position.fen())
+    assertLegal(answerPosition, moment.answerSan, `момент ${index + 1}, ответ`)
+    const actual = history[moment.ply]
+    if (moment.answerSan !== actual) fail(`момент ${index + 1}: answerSan ${moment.answerSan}, а в партии ${actual} (включая суффикс шаха/мата)`)
+    if (moment.kind === 'find' && position.turn() !== game.heroColor) fail(`момент ${index + 1}: ходит не герой (${position.turn()} вместо ${game.heroColor})`)
     for (const alt of moment.altAcceptable ?? []) assertLegal(new Chess(position.fen()), alt, `момент ${index + 1}, альтернатива`)
     for (const refutation of moment.refutations ?? []) {
       const branch = new Chess(position.fen())
@@ -48,6 +63,7 @@ function validate(game: Game) {
     let position: Chess
     try { position = new Chess(drill.fen) } catch { fail(`упражнение ${index + 1}: неверный FEN`) }
     if (position.turn() !== drill.side) fail(`упражнение ${index + 1}: side не совпадает с FEN`)
+    if (studyPositions.has(positionKey(drill.fen))) fail(`упражнение ${index + 1}: FEN встречается в учебной партии`)
     assertLegal(position, drill.answerSan, `упражнение ${index + 1}, ответ`)
   }
   console.log(`✓ ${game.title}: ${history.length} полуходов, ${game.moments.length} моментов, ${game.drills.length} упражнений`)
