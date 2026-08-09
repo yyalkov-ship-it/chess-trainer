@@ -1,0 +1,73 @@
+[Event "Opera Game"]
+[White "Paul Morphy"]
+[Black "Duke Karl / Count Isouard"]
+[Result "1-0"]
+
+1.e4 e5 2.Nf3 d6 3.d4 Bg4 4.dxe5 Bxf3 5.Qxf3 dxe5 6.Bc4 Nf6 7.Qb3 Qe7 8.Nc3 c6 9.Bg5 b5 10.Nxb5 cxb5 11.Bxb5+ Nbd7 12.O-O-O Rd8 13.Rxd7 Rxd7 14.Rd1 Qe6 15.Bxd7+ Nxd7 16.Qb8+ Nxb8 17.Rd8# 1-0
+
+[Event "Evergreen Game"]
+[White "Adolf Anderssen"]
+[Black "Jean Dufresne"]
+[Result "1-0"]
+
+1.e4 e5 2.Nf3 Nc6 3.Bc4 Bc5 4.b4 Bxb4 5.c3 Ba5 6.d4 exd4 7.O-O d3 8.Qb3 Qf6 9.e5 Qg6 10.Re1 Nge7 11.Ba3 b5 12.Qxb5 Rb8 13.Qa4 Bb6 14.Nbd2 Bb7 15.Ne4 Qf5 16.Bxd3 Qh5 17.Nf6+ gxf6 18.exf6 Rg8 19.Rad1 Qxf3 20.Rxe7+ Nxe7 21.Qxd7+ Kxd7 22.Bf5+ Ke8 23.Bd7+ Kf8 24.Bxe7# 1-0
+
+[Event "Immortal Game"]
+[White "Adolf Anderssen"]
+[Black "Lionel Kieseritzky"]
+[Result "1-0"]
+
+1.e4 e5 2.f4 exf4 3.Bc4 Qh4+ 4.Kf1 b5 5.Bxb5 Nf6 6.Nf3 Qh6 7.d3 Nh5 8.Nh4 Qg5 9.Nf5 c6 10.g4 Nf6 11.Rg1 cxb5 12.h4 Qg6 13.h5 Qg5 14.Qf3 Ng8 15.Bxf4 Qf6 16.Nc3 Bc5 17.Nd5 Qxb2 18.Bd6 Bxg1 19.e5 Qxa1+ 20.Ke2 Na6 21.Nxg7+ Kd8 22.Qf6+ Nxf6 23.Be7# 1-0
+
+[Event "Lodz"]
+[Site "Lodz RUE"]
+[Date "1907.12.26"]
+[Round "6"]
+[White "Georg Rotlewi"]
+[Black "Akiba Rubinstein"]
+[Result "0-1"]
+
+1.d4 d5 2.Nf3 e6 3.e3 c5 4.c4 Nc6 5.Nc3 Nf6 6.dxc5 Bxc5 7.a3 a6 8.b4 Bd6 9.Bb2 O-O 10.Qd2 Qe7 11.Bd3 dxc4 12.Bxc4 b5 13.Bd3 Rd8 14.Qe2 Bb7 15.O-O Ne5 16.Nxe5 Bxe5 17.f4 Bc7 18.e4 Rac8 19.e5 Bb6+ 20.Kh1 Ng4 21.Be4 Qh4 22.g3 Rxc3 23.gxh4 Rd2 24.Qxd2 Bxe4+ 25.Qg2 Rh3 26.Bd4 Bxd4 0-1
+
+[Event "New York"]
+[Site "New York, NY USA"]
+[Date "1924.03.23"]
+[Round "6"]
+[White "Jose Raul Capablanca"]
+[Black "Savielly Tartakower"]
+[Result "1-0"]
+
+1.d4 f5 2.Nf3 e6 3.c4 Nf6 4.Bg5 Be7 5.Nc3 O-O 6.e3 b6 7.Bd3 Bb7 8.O-O Qe8 9.Qe2 Ne4 10.Bxe7 Nxc3 11.bxc3 Qxe7 12.a4 Bxf3 13.Qxf3 Nc6 14.Rfb1 Rae8 15.Qh3 Rf6 16.f4 Na5 17.Qf3 d6 18.Re1 Qd7 19.e4 fxe4 20.Qxe4 g6 21.g3 Kf8 22.Kg2 Rf7 23.h4 d5 24.cxd5 exd5 25.Qxe8+ Qxe8 26.Rxe8+ Kxe8 27.h5 Rf6 28.hxg6 hxg6 29.Rh1 Kf8 30.Rh7 Rc6 31.g4 Nc4 32.g5 Ne3+ 33.Kf3 Nf5 34.Bxf5 gxf5 35.Kg3 Rxc3+ 36.Kh4 Rf3 37.g6 Rxf4+ 38.Kg5 Re4 39.Kf6 Kg8 40.Rg7+ Kh8 41.Rxc7 Re8 42.Kxf5 Re4 43.Kf6 Rf4+ 44.Ke5 Rg4 45.g7+ Kg8 46.Rxa7 Rg1 47.Kxd5 Rc1 48.Kd6 Rc2 49.d5 Rc1 50.Rc7 Ra1 51.Kc6 Rxa4 52.d6 Rd4 53.d7 Rc4+ 54.Kb7 Rd4 55.Kc8 Rd3 56.d8=Q+ Rxd8+ 57.Kxd8 Kh7 58.Rb7 b5 59.Rxb5 Kxg7 60.Rb6 1-0
+
+[Event "Victory Tournament"]
+[Site "Hastings ENG"]
+[Date "1919.??.??"]
+[White "William Winter"]
+[Black "Jose Raul Capablanca"]
+[Result "0-1"]
+
+1.e4 e5 2.Nf3 Nc6 3.Nc3 Nf6 4.Bb5 Bb4 5.O-O O-O 6.Bxc6 dxc6 7.d3 Bd6 8.Bg5 h6 9.Bh4 c5 10.Nd5 g5 11.Nxf6+ Qxf6 12.Bg3 Bg4 13.h3 Bxf3 14.Qxf3 Qxf3 15.gxf3 f6 16.Kg2 a5 17.a4 Kf7 18.Rh1 Ke6 19.h4 Rfb8 20.hxg5 hxg5 21.b3 c6 22.Ra2 b5 23.Rha1 c4 24.axb5 cxb3 25.cxb3 Rxb5 26.Ra4 Rxb3 27.d4 Rb5 28.Rc4 Rb4 29.Rxc6 Rxd4 0-1
+
+[Event "Amsterdam"]
+[Date "1889.08.26"]
+[White "Emanuel Lasker"]
+[Black "Johann Hermann Bauer"]
+[Result "1-0"]
+
+1.f4 d5 2.e3 Nf6 3.b3 e6 4.Bb2 Be7 5.Bd3 b6 6.Nc3 Bb7 7.Nf3 Nbd7 8.O-O O-O 9.Ne2 c5 10.Ng3 Qc7 11.Ne5 Nxe5 12.Bxe5 Qc6 13.Qe2 a6 14.Nh5 Nxh5 15.Bxh7+ Kxh7 16.Qxh5+ Kg8 17.Bxg7 Kxg7 18.Qg4+ Kh7 19.Rf3 e5 20.Rh3+ Qh6 21.Rxh6+ Kxh6 22.Qd7 Bf6 23.Qxb7 Kg7 24.Rf1 Rab8 25.Qd7 Rfd8 26.Qg4+ Kf8 27.fxe5 Bg7 28.e6 Rb7 29.Qg6 f6 30.Rxf6+ Bxf6 31.Qxf6+ Ke8 32.Qh8+ Ke7 33.Qg7+ Kxe6 34.Qxb7 Rd6 35.Qxa6 d4 36.exd4 cxd4 37.h4 d3 38.Qxd3 1-0
+
+[Event "Hastings"]
+[Date "1895.08.17"]
+[White "Wilhelm Steinitz"]
+[Black "Curt von Bardeleben"]
+[Result "1-0"]
+
+1.e4 e5 2.Nf3 Nc6 3.Bc4 Bc5 4.c3 Nf6 5.d4 exd4 6.cxd4 Bb4+ 7.Nc3 d5 8.exd5 Nxd5 9.O-O Be6 10.Bg5 Be7 11.Bxd5 Bxd5 12.Nxd5 Qxd5 13.Bxe7 Nxe7 14.Re1 f6 15.Qe2 Qd7 16.Rac1 c6 17.d5 cxd5 18.Nd4 Kf7 19.Ne6 Rhc8 20.Qg4 g6 21.Ng5+ Ke8 22.Rxe7+ Kf8 23.Rf7+ Qxf7 24.Qxc8+ Rxc8 25.Rxc8+ 1-0
+
+[Event "Banja Luka"]
+[Date "1931.??.??"]
+[White "Alexander Alekhine"]
+[Black "Milorad Vasic"]
+[Result "1-0"]
+
+1.d4 Nf6 2.c4 e6 3.Nf3 d5 4.Nc3 Be7 5.Bg5 O-O 6.e3 Nbd7 7.Rc1 c6 8.Qc2 Re8 9.Bd3 dxc4 10.Bxc4 Nd5 11.Ne4 f5 12.Bxe7 Qxe7 13.Ned2 b5 14.Bxd5 cxd5 15.O-O a5 16.Nb3 a4 17.Nc5 Nxc5 18.Qxc5 Qxc5 19.Rxc5 b4 20.Rfc1 Ba6 21.Ne5 Reb8 22.f3 b3 23.a3 h6 24.Kf2 Kh7 25.h4 Rf8 26.Kg3 Rfb8 27.Rc7 Bb5 28.R1c5 Ba6 29.R5c6 Re8 30.Kf4 Kg8 31.h5 Bf1 32.g3 Ba6 33.Rf7 Kh7 34.Rcc7 Rg8 35.Nd7 Kh8 36.Nf6 Rgf8 37.Rxg7 Rxf6 38.Ke5 Rff8 39.Rh7+ Kg8 40.Rcg7# 1-0
