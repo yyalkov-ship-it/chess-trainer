@@ -1,4 +1,5 @@
-import kasparovTopalov from './games/kasparov-topalov-1999.json'
 import type { Game } from './types'
 
-export const games: Game[] = [kasparovTopalov as Game]
+const modules = import.meta.glob('./games/*.json', { eager: true, import: 'default' })
+
+export const games = Object.values(modules) as Game[]
