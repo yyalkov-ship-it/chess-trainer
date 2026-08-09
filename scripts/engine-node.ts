@@ -1,4 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createInterface } from 'node:readline'
 import { Chess } from 'chess.js'
@@ -9,7 +10,10 @@ export class NodeStockfish {
   private lines: string[] = []
   private wake: (() => void) | null = null
   constructor() {
-    this.child = spawn(process.execPath, [resolve('node_modules/stockfish/bin/stockfish-18-lite-single.js')])
+    const native = [process.env.STOCKFISH_PATH, '/opt/homebrew/bin/stockfish', '/usr/games/stockfish'].find((path) => path && existsSync(path))
+    this.child = native
+      ? spawn(native, [])
+      : spawn(process.execPath, [resolve('node_modules/stockfish/bin/stockfish-18.js')])
     createInterface({ input: this.child.stdout }).on('line', (line) => { this.lines.push(line); this.wake?.() })
   }
   private send(command: string) { this.child.stdin.write(`${command}\n`) }
@@ -22,7 +26,7 @@ export class NodeStockfish {
     }
     this.send('stop'); throw new Error('Stockfish не ответил')
   }
-  async ready() { this.send('uci'); await this.waitFor((l) => l === 'uciok'); this.send('setoption name Threads value 1'); this.send('setoption name Hash value 32'); this.send('isready'); await this.waitFor((l) => l === 'readyok') }
+  async ready() { this.send('uci'); await this.waitFor((l) => l === 'uciok'); this.send('setoption name Threads value 4'); this.send('setoption name Hash value 256'); this.send('isready'); await this.waitFor((l) => l === 'readyok') }
   async analyse(fen: string, multiPv = 1, depth = 20): Promise<Pv[]> {
     this.lines.length = 0; this.send('setoption name Clear Hash'); this.send(`setoption name MultiPV value ${multiPv}`); this.send(`position fen ${fen}`); this.send(`go depth ${depth}`)
     const lines = await this.waitFor((l) => l.startsWith('bestmove ')); const results = new Map<number, Pv>()

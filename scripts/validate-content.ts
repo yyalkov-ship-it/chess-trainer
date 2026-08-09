@@ -9,6 +9,15 @@ if (!files.length) throw new Error('В src/content/games нет партий')
 const games = files.map((file) => JSON.parse(readFileSync(resolve(directory, file), 'utf8')) as Game)
 const positionKey = (fen: string) => fen.split(' ').slice(0, 4).join(' ')
 const studyPositions = new Set<string>()
+const sourcePositions = new Set<string>()
+for (const sourceFile of readdirSync(resolve('src/content/sources')).filter((name) => name.endsWith('.pgn'))) {
+  const source = readFileSync(resolve('src/content/sources', sourceFile), 'utf8')
+  for (const chunk of source.split(/\n(?=\[Event )/).filter((item) => item.trim())) {
+    const sourceGame = new Chess(); sourceGame.loadPgn(chunk); const sourceReplay = new Chess()
+    sourcePositions.add(positionKey(sourceReplay.fen()))
+    for (const san of sourceGame.history()) { sourceReplay.move(san); sourcePositions.add(positionKey(sourceReplay.fen())) }
+  }
+}
 for (const game of games) {
   const chess = new Chess()
   chess.loadPgn(game.pgn)
@@ -41,6 +50,8 @@ function validate(game: Game) {
   }
 
   let previousPly = -1
+  let momentsWithArrows = 0
+  const isSquare = (value: string) => /^[a-h][1-8]$/.test(value)
   for (const [index, moment] of game.moments.entries()) {
     if (moment.ply <= previousPly) fail(`моменты должны идти по возрастанию ply (индекс ${index})`)
     previousPly = moment.ply
@@ -58,12 +69,19 @@ function validate(game: Game) {
     }
     if (moment.kind === 'find' && moment.hints.length < 2) fail(`момент ${index + 1}: нужно минимум две подсказки`)
     if (moment.kind === 'find' && (moment.refutations?.length ?? 0) < 2) fail(`момент ${index + 1}: нужно минимум два опровержения`)
+    if ((moment.arrows?.length ?? 0) > 0) momentsWithArrows += 1
+    for (const arrow of moment.arrows ?? []) {
+      if (!isSquare(arrow.from) || !isSquare(arrow.to)) fail(`момент ${index + 1}: неверное поле стрелки ${arrow.from}-${arrow.to}`)
+    }
+    for (const square of moment.highlight ?? []) if (!isSquare(square)) fail(`момент ${index + 1}: неверное поле подсветки ${square}`)
   }
+  if (momentsWithArrows < 6) fail(`стрелки есть только в ${momentsWithArrows} моментах, нужно минимум 6`)
   for (const [index, drill] of game.drills.entries()) {
     let position: Chess
     try { position = new Chess(drill.fen) } catch { fail(`упражнение ${index + 1}: неверный FEN`) }
     if (position.turn() !== drill.side) fail(`упражнение ${index + 1}: side не совпадает с FEN`)
     if (studyPositions.has(positionKey(drill.fen))) fail(`упражнение ${index + 1}: FEN встречается в учебной партии`)
+    if (!sourcePositions.has(positionKey(drill.fen))) fail(`упражнение ${index + 1}: FEN не получен из PGN в src/content/sources`)
     assertLegal(position, drill.answerSan, `упражнение ${index + 1}, ответ`)
   }
   console.log(`✓ ${game.title}: ${history.length} полуходов, ${game.moments.length} моментов, ${game.drills.length} упражнений`)

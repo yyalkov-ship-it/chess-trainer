@@ -14,6 +14,7 @@ class StockfishEngine {
   private ready: Promise<void> | null = null
   private pending: Pending | null = null
   private queue: Promise<unknown> = Promise.resolve()
+  private supportsLimitStrength = false
 
   private start() {
     if (this.ready) return this.ready
@@ -24,6 +25,7 @@ class StockfishEngine {
       worker.onerror = () => reject(new Error('Не удалось загрузить Stockfish'))
       worker.onmessage = (event) => {
         const line = String(event.data)
+        if (line.startsWith('option name UCI_LimitStrength ')) this.supportsLimitStrength = true
         if (line === 'uciok') { worker.postMessage('isready'); return }
         if (line === 'readyok') { window.clearTimeout(timeout); resolve(); return }
         this.consume(line)
@@ -66,9 +68,12 @@ class StockfishEngine {
         this.pending = { resolve, reject, bestMove: '', centipawns: 0, depth: 0, timeout }
         this.worker.postMessage('ucinewgame')
         if (strength) {
-          this.worker.postMessage('setoption name UCI_LimitStrength value true')
-          this.worker.postMessage(`setoption name UCI_Elo value ${strength}`)
-          this.worker.postMessage(`setoption name Skill Level value ${strength === 1200 ? 2 : strength === 1500 ? 6 : 10}`)
+          if (this.supportsLimitStrength) {
+            this.worker.postMessage('setoption name UCI_LimitStrength value true')
+            this.worker.postMessage(`setoption name UCI_Elo value ${strength}`)
+          } else {
+            this.worker.postMessage(`setoption name Skill Level value ${strength === 1200 ? 2 : strength === 1500 ? 6 : 10}`)
+          }
         } else {
           this.worker.postMessage('setoption name UCI_LimitStrength value false')
           this.worker.postMessage('setoption name Skill Level value 20')

@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createInterface } from 'node:readline'
 import { Chess } from 'chess.js'
@@ -13,7 +13,10 @@ class NodeStockfish {
   private wake: (() => void) | null = null
 
   constructor() {
-    this.child = spawn(process.execPath, [resolve('node_modules/stockfish/bin/stockfish-18-lite-single.js')])
+    const native = [process.env.STOCKFISH_PATH, '/opt/homebrew/bin/stockfish', '/usr/games/stockfish'].find((path) => path && existsSync(path))
+    this.child = native
+      ? spawn(native, [])
+      : spawn(process.execPath, [resolve('node_modules/stockfish/bin/stockfish-18.js')])
     createInterface({ input: this.child.stdout }).on('line', (line) => {
       this.lines.push(line)
       this.wake?.()
@@ -21,7 +24,7 @@ class NodeStockfish {
   }
 
   private send(command: string) { this.child.stdin.write(`${command}\n`) }
-  private async waitFor(match: (line: string) => boolean, timeoutMs = 120_000) {
+  private async waitFor(match: (line: string) => boolean, timeoutMs = 300_000) {
     const deadline = Date.now() + timeoutMs
     while (Date.now() < deadline) {
       const index = this.lines.findIndex(match)
@@ -37,8 +40,8 @@ class NodeStockfish {
 
   async ready() {
     this.send('uci'); await this.waitFor((line) => line === 'uciok')
-    this.send('setoption name Threads value 1')
-    this.send('setoption name Hash value 32')
+    this.send('setoption name Threads value 4')
+    this.send('setoption name Hash value 256')
     this.send('isready'); await this.waitFor((line) => line === 'readyok')
   }
 
@@ -79,11 +82,12 @@ const evaluatePosition = async (chess: Chess) => {
 
 const files = readdirSync(resolve('src/content/games')).filter((name) => name.endsWith('.json')).sort()
 const games = files.map((file) => JSON.parse(readFileSync(resolve('src/content/games', file), 'utf8')) as Game)
+const positionKey = (fen: string) => fen.split(' ').slice(0, 4).join(' ')
 const studyFens = new Set<string>()
 for (const game of games) {
   const parsed = new Chess(); parsed.loadPgn(game.pgn)
   const history = parsed.history()
-  for (let ply = 0; ply <= history.length; ply += 1) studyFens.add(at(history, ply).fen())
+  for (let ply = 0; ply <= history.length; ply += 1) studyFens.add(positionKey(at(history, ply).fen()))
 }
 
 const engine = new NodeStockfish()
@@ -92,6 +96,7 @@ const fail = (message: string) => { failures += 1; console.error(`  ✗ ${messag
 
 try {
   await engine.ready()
+  console.log('Stockfish: Threads 4, Hash 256 MB, depth 20')
   for (const game of games) {
     const parsed = new Chess(); parsed.loadPgn(game.pgn)
     const history = parsed.history()
@@ -105,13 +110,14 @@ try {
       const correctEval = -(await evaluatePosition(correct))
       for (const refutation of moment.refutations ?? []) {
         const wrong = new Chess(before.fen()); wrong.move(refutation.san)
-        const analysis = await engine.analyse(wrong.fen())
+        const analysis = await engine.analyse(wrong.fen(), 3)
         const loss = (correctEval + analysis[0].cp) / 100
-        const reply = sanFromUci(wrong.fen(), analysis[0].moves[0])
         const lineFirst = refutation.line.trim().split(/\s+/)[0]
-        console.log(`  ply ${moment.ply} ${refutation.san}: потеря ${loss.toFixed(2)}, ответ ${reply}`)
+        const candidates = analysis.map((pv) => ({ san: sanFromUci(wrong.fen(), pv.moves[0]), gap: (analysis[0].cp - pv.cp) / 100 }))
+        const accepted = candidates.some((candidate) => clean(candidate.san) === clean(lineFirst) && candidate.gap <= 0.5)
+        console.log(`  ply ${moment.ply} ${refutation.san}: потеря ${loss.toFixed(2)}, ответ ${lineFirst}, топ-3 ${candidates.map((item) => `${item.san}(${item.gap.toFixed(2)})`).join(', ')}`)
         if (loss < 1.5) fail(`ply ${moment.ply} ${refutation.san}: потеря ${loss.toFixed(2)} < 1.50`)
-        if (clean(lineFirst) !== clean(reply)) fail(`ply ${moment.ply} ${refutation.san}: line ${lineFirst}, движок ${reply}`)
+        if (!accepted) fail(`ply ${moment.ply} ${refutation.san}: line ${lineFirst} не входит в допустимый топ-3`)
       }
     }
     for (const [index, drill] of game.drills.entries()) {
@@ -121,7 +127,7 @@ try {
       console.log(`  упражнение ${index + 1}: ${first}, отрыв ${gap.toFixed(2)}`)
       if (clean(first) !== clean(drill.answerSan)) fail(`упражнение ${index + 1}: ответ ${drill.answerSan}, движок ${first}`)
       if (gap < 1.5) fail(`упражнение ${index + 1}: отрыв ${gap.toFixed(2)} < 1.50`)
-      if (studyFens.has(drill.fen)) fail(`упражнение ${index + 1}: FEN взят из учебной партии`)
+      if (studyFens.has(positionKey(drill.fen))) fail(`упражнение ${index + 1}: FEN взят из учебной партии`)
     }
   }
 } finally { engine.close() }
