@@ -44,6 +44,7 @@ class NodeStockfish {
 
   async analyse(fen: string, multiPv = 1, depth = 20): Promise<Pv[]> {
     this.lines.length = 0
+    this.send('setoption name Clear Hash')
     this.send(`setoption name MultiPV value ${multiPv}`)
     this.send(`position fen ${fen}`)
     this.send(`go depth ${depth}`)
