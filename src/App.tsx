@@ -12,6 +12,7 @@ import { addMistake, loadStore, registerStudyDay, reviewMistake, saveProgress, t
 import { engine, heroEvaluation, humanEvaluation, uciToMove } from './engine'
 
 type Screen = { name: 'home' } | { name: 'intro'; game: Game } | { name: 'lesson'; game: Game } | { name: 'result'; game: Game } | { name: 'drills'; game: Game } | { name: 'mistakes' }
+type RefutationPlayback = { moves: string[]; shown: number; why: string }
 
 function positionAt(history: string[], ply: number) {
   const chess = new Chess()
@@ -134,6 +135,7 @@ function Lesson({ game, onExit, onComplete }: { game: Game; onExit: () => void; 
   const [flash, setFlash] = useState<'right' | 'wrong' | null>(null)
   const [playFen, setPlayFen] = useState<string | null>(null)
   const [engineBusy, setEngineBusy] = useState(false)
+  const [refutationPlayback, setRefutationPlayback] = useState<RefutationPlayback | null>(null)
   const chess = useMemo(() => positionAt(history, ply), [history, ply])
   const moment = game.moments.find((item) => item.ply === ply)
   const mustFind = moment?.kind === 'find' && !solved.includes(ply)
@@ -145,7 +147,14 @@ function Lesson({ game, onExit, onComplete }: { game: Game; onExit: () => void; 
   }, [history, ply])
 
   useEffect(() => { saveProgress({ gameId: game.id, currentPly: ply, score, startedAt: startedAt.current, solved, mistakes }) }, [game.id, ply, score, solved, mistakes])
-  useEffect(() => { setAttempts(0); setFeedback(null); setFlash(null) }, [ply])
+  useEffect(() => { setAttempts(0); setFeedback(null); setFlash(null); setRefutationPlayback(null) }, [ply])
+  useEffect(() => {
+    if (!refutationPlayback || refutationPlayback.shown >= refutationPlayback.moves.length) return
+    const timer = window.setTimeout(() => {
+      setRefutationPlayback((current) => current ? { ...current, shown: current.shown + 1 } : null)
+    }, 700)
+    return () => window.clearTimeout(timer)
+  }, [refutationPlayback])
   const blink = (kind: 'right' | 'wrong') => { setFlash(kind); window.setTimeout(() => setFlash(null), 500) }
 
   const revealAnswer = (target: Moment) => {
@@ -177,7 +186,9 @@ function Lesson({ game, onExit, onComplete }: { game: Game; onExit: () => void; 
     } else {
       const refutation = moment.refutations?.find((item) => item.san === move.san)
       if (refutation) {
-        setFeedback(`${refutation.why} Ответ соперника: ${refutation.line}.`)
+        const moves = [move.san, ...refutation.line.trim().split(/\s+/).filter(Boolean)]
+        setRefutationPlayback({ moves, shown: 1, why: refutation.why })
+        setFeedback(refutation.why)
       } else {
         setFeedback(`${moment.hints[nextAttempt - 1]} Stockfish проверяет твою идею…`)
         setEngineBusy(true)
@@ -213,16 +224,31 @@ function Lesson({ game, onExit, onComplete }: { game: Game; onExit: () => void; 
     setPly(bounded)
   }
   const visibleFeedback = feedback ?? (moment?.kind === 'explain' ? moment.explanation : null)
+  const displayedChess = useMemo(() => {
+    if (!refutationPlayback) return chess
+    const branch = new Chess(chess.fen())
+    for (const san of refutationPlayback.moves.slice(0, refutationPlayback.shown)) branch.move(san)
+    return branch
+  }, [chess, refutationPlayback])
+  const playbackLastMove = useMemo(() => {
+    if (!refutationPlayback?.shown) return lastMove
+    const branch = new Chess(chess.fen())
+    let latest: { from: string; to: string } | null = null
+    for (const san of refutationPlayback.moves.slice(0, refutationPlayback.shown)) latest = branch.move(san)
+    return latest ? [latest.from as Key, latest.to as Key] : lastMove
+  }, [chess, lastMove, refutationPlayback])
 
   if (playFen) return <PlayMode initialFen={playFen} heroColor={game.heroColor} onExit={() => setPlayFen(null)} />
   return <main className="lesson-shell">
     <header className="lesson-top"><button className="back" onClick={onExit}>← Выйти</button><span>{ply}/{history.length}</span><strong>{score} очков</strong></header>
-    <Board chess={chess} orientation={game.heroColor === 'w' ? 'white' : 'black'} movable={Boolean(mustFind)} onMove={onMove} flash={flash} lastMove={lastMove} moment={moment} />
+    <Board chess={displayedChess} orientation={game.heroColor === 'w' ? 'white' : 'black'} movable={Boolean(mustFind && !refutationPlayback)} onMove={onMove} flash={flash} lastMove={playbackLastMove} moment={refutationPlayback ? undefined : moment} />
     <section className="coach-card">
       <span className="eyebrow">{mustFind ? `Твоя очередь · попытка ${attempts + 1} из 3` : moment ? 'Разбор позиции' : 'Ходы партии'}</span>
       <h2>{mustFind ? moment?.prompt : moment?.prompt ?? 'Следи, как развивается партия'}</h2>
       {visibleFeedback && <p className="feedback">{visibleFeedback}</p>}
       {engineBusy && <p className="engine-status">Анализ позиции…</p>}
+      {refutationPlayback && refutationPlayback.shown < refutationPlayback.moves.length && <p className="engine-status">Смотри ответ соперника: ход {refutationPlayback.shown} из {refutationPlayback.moves.length}</p>}
+      {refutationPlayback && refutationPlayback.shown >= refutationPlayback.moves.length && <button className="primary" onClick={() => { setRefutationPlayback(null); setFeedback(moment?.hints[Math.min(attempts - 1, (moment?.hints.length ?? 1) - 1)] ?? null) }}>Вернуться и попробовать снова</button>}
       {mustFind && attempts === 0 && <p>Сделай ход фигурой прямо на доске.</p>}
       {!mustFind && moment?.kind === 'find' && solved.includes(ply) && <button className="primary" onClick={() => setPly((value) => Math.min(value + 1, history.length))}>Продолжить</button>}
       {moment && !mustFind && <button className="secondary" onClick={() => setPlayFen(chess.fen())}>Сыграть эту позицию</button>}

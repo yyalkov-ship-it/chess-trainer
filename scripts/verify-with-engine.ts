@@ -69,6 +69,13 @@ const at = (history: string[], ply: number) => {
   return chess
 }
 const sanFromUci = (fen: string, uci: string) => new Chess(fen).move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] ?? 'q' }).san
+const evaluatePosition = async (chess: Chess) => {
+  if (chess.isCheckmate()) return -100_000
+  if (chess.isDraw()) return 0
+  const result = await engine.analyse(chess.fen())
+  if (!result[0]) throw new Error(`Stockfish не вернул оценку позиции ${chess.fen()}`)
+  return result[0].cp
+}
 
 const files = readdirSync(resolve('src/content/games')).filter((name) => name.endsWith('.json')).sort()
 const games = files.map((file) => JSON.parse(readFileSync(resolve('src/content/games', file), 'utf8')) as Game)
@@ -95,7 +102,7 @@ try {
       if (moment.kind !== 'find') continue
       const before = at(history, moment.ply)
       const correct = new Chess(before.fen()); correct.move(moment.answerSan)
-      const correctEval = -(await engine.analyse(correct.fen()))[0].cp
+      const correctEval = -(await evaluatePosition(correct))
       for (const refutation of moment.refutations ?? []) {
         const wrong = new Chess(before.fen()); wrong.move(refutation.san)
         const analysis = await engine.analyse(wrong.fen())
