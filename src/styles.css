@@ -40,6 +40,16 @@ h2 { margin: 0; font-size: 22px; }
 .coach-card p { margin: 8px 0; color: #4d584d; line-height: 1.45; }
 .coach-card .feedback { padding: 11px 12px; border-radius: 12px; background: #e6edde; color: #263d2a; }
 .coach-card .primary { margin-top: 8px; }
+.secondary { width: 100%; min-height: 48px; margin-top: 10px; color: #284e31; border: 1px solid #b8c3b7; border-radius: 14px; background: #f3f6ed; font-weight: 800; }
+.engine-status { font-weight: 750; }
+.eval-track { width: 100%; height: 8px; background: #1b211c; }
+.eval-track span { display: block; height: 100%; background: #f3f0e6; transition: width .3s ease; }
+.play-card { min-height: 190px; }
+.play-card label { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; font-weight: 750; }
+.play-card select { min-width: 110px; min-height: 44px; padding: 0 10px; border: 1px solid #b8c3b7; border-radius: 10px; background: #fff; font: inherit; }
+.play-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.play-actions button { min-height: 48px; padding: 8px; color: #284e31; border: 1px solid #b8c3b7; border-radius: 12px; background: #f3f6ed; font-weight: 750; }
+.play-actions button:disabled { opacity: .4; }
 .lesson-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 12px; }
 .lesson-nav button { min-height: 46px; padding: 8px; color: #284e31; border: 1px solid #c9cdbf; border-radius: 12px; background: #ffffffa8; font-weight: 750; }
 .lesson-nav button:disabled { opacity: .38; }
@@ -49,3 +59,4 @@ h2 { margin: 0; font-size: 22px; }
 .move-strip button:disabled { opacity: .55; }
 @media (prefers-color-scheme: dark) { :root { color: #edf2ea; background: #111812; } body { background: radial-gradient(circle at 85% 0%, #273a29 0, transparent 35%), #111812; } .hero p, .section-title span { color: #aeb8ad; } .mistakes { color: #a6aea5; border-color: #344034; background: #1c251dcc; } .lesson-facts span { color: #cdd5cc; background: #293329; } .back { color: #a9c8ad; } }
 @media (prefers-color-scheme: dark) { .coach-card { border-color: #344034; background: #1c251df0; } .coach-card p { color: #bec7bc; } .coach-card .feedback { color: #dce7d8; background: #293c2b; } .lesson-nav button { color: #c9ddc8; border-color: #3c493d; background: #202b21; } .move-strip button { color: #bdc8ba; } }
+@media (prefers-color-scheme: dark) { .secondary, .play-actions button { color: #c9ddc8; border-color: #3c493d; background: #202b21; } .play-card select { color: #edf2ea; border-color: #3c493d; background: #202b21; } }
