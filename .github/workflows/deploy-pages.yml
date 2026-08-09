@@ -24,7 +24,28 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: sudo apt-get update && sudo apt-get install -y stockfish
+      - name: Install official Stockfish 18
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/stockfish-ubuntu-x86-64-avx2.tar"
+          install_dir="$RUNNER_TEMP/stockfish-18"
+          curl --fail --location --retry 3 \
+            --output "$archive" \
+            https://github.com/official-stockfish/Stockfish/releases/download/sf_18/stockfish-ubuntu-x86-64-avx2.tar
+          echo "536c0c2c0cf06450df0bfb5e876ef0d3119950703a8f143627f990c7b5417964  $archive" | sha256sum --check --status || {
+            echo "::error::Контрольная сумма официального Stockfish 18 не совпала"
+            exit 1
+          }
+          mkdir -p "$install_dir"
+          tar -xf "$archive" -C "$install_dir"
+          stockfish_path="$(find "$install_dir" -type f -name 'stockfish-ubuntu-x86-64-avx2' -print -quit)"
+          if [[ -z "$stockfish_path" || ! -f "$stockfish_path" ]]; then
+            echo "::error::Официальный бинарник Stockfish 18 не найден в архиве"
+            exit 1
+          fi
+          chmod +x "$stockfish_path"
+          echo "STOCKFISH_PATH=$stockfish_path" >> "$GITHUB_ENV"
       - run: npm run validate:content
       - run: npm run verify:engine
       - run: npm run build

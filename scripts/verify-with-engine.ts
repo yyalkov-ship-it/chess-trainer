@@ -13,7 +13,13 @@ class NodeStockfish {
   private wake: (() => void) | null = null
 
   constructor() {
-    const native = [process.env.STOCKFISH_PATH, '/opt/homebrew/bin/stockfish', '/usr/games/stockfish'].find((path) => path && existsSync(path))
+    if (process.env.CI && !process.env.STOCKFISH_PATH) {
+      throw new Error('В CI обязателен STOCKFISH_PATH к официальному Stockfish 18')
+    }
+    if (process.env.STOCKFISH_PATH && !existsSync(process.env.STOCKFISH_PATH)) {
+      throw new Error(`STOCKFISH_PATH недоступен: ${process.env.STOCKFISH_PATH}`)
+    }
+    const native = [process.env.STOCKFISH_PATH, '/opt/homebrew/bin/stockfish'].find((path) => path && existsSync(path))
     this.child = native
       ? spawn(native, [])
       : spawn(process.execPath, [resolve('node_modules/stockfish/bin/stockfish-18.js')])
@@ -39,7 +45,13 @@ class NodeStockfish {
   }
 
   async ready() {
-    this.send('uci'); await this.waitFor((line) => line === 'uciok')
+    this.send('uci'); const uciLines = await this.waitFor((line) => line === 'uciok')
+    const bannerLine = uciLines.find((line) => /^Stockfish \d+\b/.test(line))
+    const idName = uciLines.find((line) => line.startsWith('id name '))
+    if (!idName) throw new Error('Stockfish не сообщил версию в UCI-баннере')
+    const banner = bannerLine ?? idName.replace(/^id name /, '')
+    if (!/^Stockfish 18(?:\s|$)/.test(banner)) throw new Error(`Требуется Stockfish 18, получен: ${banner}`)
+    console.log(`Движок: ${banner}`)
     this.send('setoption name Threads value 4')
     this.send('setoption name Hash value 256')
     this.send('isready'); await this.waitFor((line) => line === 'readyok')
@@ -72,10 +84,10 @@ const at = (history: string[], ply: number) => {
   return chess
 }
 const sanFromUci = (fen: string, uci: string) => new Chess(fen).move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] ?? 'q' }).san
-const evaluatePosition = async (chess: Chess) => {
+const evaluatePosition = async (chess: Chess, analyse = (fen: string) => engine.analyse(fen)) => {
   if (chess.isCheckmate()) return -100_000
   if (chess.isDraw()) return 0
-  const result = await engine.analyse(chess.fen())
+  const result = await analyse(chess.fen())
   if (!result[0]) throw new Error(`Stockfish не вернул оценку позиции ${chess.fen()}`)
   return result[0].cp
 }
@@ -95,6 +107,11 @@ let failures = 0
 const fail = (message: string) => { failures += 1; console.error(`  ✗ ${message}`) }
 
 try {
+  const terminal = new Chess()
+  for (const san of ['f3', 'e5', 'g4', 'Qh4#']) terminal.move(san)
+  const terminalScore = await evaluatePosition(terminal, async () => { throw new Error('Движок не должен вызываться для терминальной позиции') })
+  if (terminalScore !== -100_000) throw new Error(`Неверная оценка мата: ${terminalScore}`)
+  console.log('Терминальная позиция: проверка без вызова движка пройдена')
   await engine.ready()
   console.log('Stockfish: Threads 4, Hash 256 MB, depth 20')
   for (const game of games) {
@@ -110,11 +127,15 @@ try {
       const correctEval = -(await evaluatePosition(correct))
       for (const refutation of moment.refutations ?? []) {
         const wrong = new Chess(before.fen()); wrong.move(refutation.san)
-        const analysis = await engine.analyse(wrong.fen(), 3)
-        const loss = (correctEval + analysis[0].cp) / 100
+        const wrongEval = await evaluatePosition(wrong)
+        const loss = (correctEval + wrongEval) / 100
         const lineFirst = refutation.line.trim().split(/\s+/)[0]
+        const analysis = wrong.isGameOver() ? [] : await engine.analyse(wrong.fen(), 3)
+        if (!wrong.isGameOver() && !analysis[0]) throw new Error(`Stockfish не вернул варианты опровержения ${refutation.san} в позиции ${wrong.fen()}`)
         const candidates = analysis.map((pv) => ({ san: sanFromUci(wrong.fen(), pv.moves[0]), gap: (analysis[0].cp - pv.cp) / 100 }))
-        const accepted = candidates.some((candidate) => clean(candidate.san) === clean(lineFirst) && candidate.gap <= 0.5)
+        const accepted = wrong.isGameOver()
+          ? refutation.line.trim() === ''
+          : candidates.some((candidate) => clean(candidate.san) === clean(lineFirst) && candidate.gap <= 0.5)
         console.log(`  ply ${moment.ply} ${refutation.san}: потеря ${loss.toFixed(2)}, ответ ${lineFirst}, топ-3 ${candidates.map((item) => `${item.san}(${item.gap.toFixed(2)})`).join(', ')}`)
         if (loss < 1.5) fail(`ply ${moment.ply} ${refutation.san}: потеря ${loss.toFixed(2)} < 1.50`)
         if (!accepted) fail(`ply ${moment.ply} ${refutation.san}: line ${lineFirst} не входит в допустимый топ-3`)
