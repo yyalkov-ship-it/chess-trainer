@@ -14,6 +14,16 @@ export type Moment = {
   highlight?: Square[]
 }
 export type Drill = { fen: string; side: 'w' | 'b'; prompt: string; answerSan: string; explanation: string }
+export type GameTheme = 'attack' | 'positional' | 'endgame'
+export type GameSource = {
+  file: string
+  white: string
+  black: string
+  event: string
+  year: number
+  eco: string
+  url: string
+}
 export type Game = {
   id: string
   title: string
@@ -22,6 +32,8 @@ export type Game = {
   heroColor: 'w' | 'b'
   level: 1 | 2 | 3
   intro: string
+  theme: GameTheme
+  source: GameSource
   pgn: string
   moments: Moment[]
   drills: Drill[]
