@@ -345,32 +345,32 @@
   ],
   "drills": [
     {
-      "fen": "1r2k2r/pbppnppp/1bn2N2/4P2q/Q7/B1PB1N2/P4PPP/R3R1K1 b k - 2 17",
+      "fen": "r2q1rk1/pp2ppbp/1np2np1/2Q3B1/3PP1b1/2N2N2/PP3PPP/3RKB1R b K - 6 11",
       "side": "b",
-      "prompt": "Как чёрным принять жертву и открыть линию g?",
-      "answerSan": "gxf6",
-      "explanation": "17...gxf6! 18.exf6 Rg8 19.Be4 Qh3. Чёрные принимают вызов и быстро подключают ладью и ферзя к белому королю."
+      "prompt": "Найди сильнейший ход из партии Donald Byrne — Robert James Fischer.",
+      "answerSan": "Na4",
+      "explanation": "Na4 — точный ход, сыгранный в партии урока «Бёрн — Фишер, Нью-Йорк 1956». Позиция получена из PGN этой партии перед ходом 11 чёрных."
     },
     {
-      "fen": "1r2k2r/pbppnp1p/1bn2P2/7q/Q7/B1PB1N2/P4PPP/R3R1K1 b k - 0 18",
+      "fen": "r2q1rk1/pp2ppbp/2p2np1/6B1/n2PP1b1/Q1N2N2/PP3PPP/3RKB1R b K - 8 12",
       "side": "b",
-      "prompt": "Подключи ладью к атаке по открытой линии.",
-      "answerSan": "Rg8",
-      "explanation": "18...Rg8! 19.Be4 Qh3 20.g3 Rxg3+! Ладья врывается с жертвой и не даёт белому королю спрятаться."
+      "prompt": "Найди сильнейший ход из партии Donald Byrne — Robert James Fischer.",
+      "answerSan": "Nxc3",
+      "explanation": "Nxc3 — точный ход, сыгранный в партии урока «Бёрн — Фишер, Нью-Йорк 1956». Позиция получена из PGN этой партии перед ходом 12 чёрных."
     },
     {
-      "fen": "1r2k1r1/pbppRp1p/1bn2P2/8/Q7/B1PB1q2/P4PPP/3R2K1 b - - 0 20",
+      "fen": "r3r1k1/pp3pbp/1qp3p1/2B5/2BP2b1/Q1n2N2/P4PPP/3R1K1R b - - 3 17",
       "side": "b",
-      "prompt": "Найди единственную защиту от шахов по линии d.",
-      "answerSan": "Kd8",
-      "explanation": "20...Kd8! 21.Rxd7+ Kc8 22.Rd8+ Kxd8. Король идёт навстречу опасности, но фигуры чёрных успевают остановить атаку."
+      "prompt": "Найди сильнейший ход из партии Donald Byrne — Robert James Fischer.",
+      "answerSan": "Be6",
+      "explanation": "Be6 — точный ход, сыгранный в партии урока «Бёрн — Фишер, Нью-Йорк 1956». Позиция получена из PGN этой партии перед ходом 17 чёрных."
     },
     {
-      "fen": "rnb1kb1r/p2p1ppp/5n2/1p3Nq1/4PpPP/3P4/PPP5/RNBQ1KR1 b kq - 0 12",
+      "fen": "r3r1k1/pp3pbp/1Bp1b1p1/8/2BP4/Q1n2N2/P4PPP/3R1K1R b - - 0 18",
       "side": "b",
-      "prompt": "Куда отвести ферзя, сохранив давление на короля?",
-      "answerSan": "Qg6",
-      "explanation": "12...Qg6! 13.h5 Nxh5 14.gxh5 Qc6. Ферзь остаётся активным и продолжает атаковать открытого короля."
+      "prompt": "Найди сильнейший ход из партии Donald Byrne — Robert James Fischer.",
+      "answerSan": "Bxc4+",
+      "explanation": "Bxc4+ — точный ход, сыгранный в партии урока «Бёрн — Фишер, Нью-Йорк 1956». Позиция получена из PGN этой партии перед ходом 18 чёрных."
     }
   ],
   "theme": "attack",

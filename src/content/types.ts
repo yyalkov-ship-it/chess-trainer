@@ -13,7 +13,15 @@ export type Moment = {
   arrows?: { from: Square; to: Square; color: 'green' | 'red' | 'blue' }[]
   highlight?: Square[]
 }
-export type Drill = { fen: string; side: 'w' | 'b'; prompt: string; answerSan: string; explanation: string }
+export type Drill = {
+  fen: string
+  side: 'w' | 'b'
+  prompt: string
+  answerSan: string
+  explanation: string
+  sourcePly?: number
+  sourceLine?: string[]
+}
 export type GameTheme = 'attack' | 'positional' | 'endgame'
 export type GameSource = {
   file: string

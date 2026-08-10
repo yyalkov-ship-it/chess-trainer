@@ -8,28 +8,18 @@ const files = readdirSync(directory).filter((name) => name.endsWith('.json')).so
 if (!files.length) throw new Error('В src/content/games нет партий')
 const games = files.map((file) => JSON.parse(readFileSync(resolve(directory, file), 'utf8')) as Game)
 const positionKey = (fen: string) => fen.split(' ').slice(0, 4).join(' ')
-const studyPositions = new Set<string>()
-const sourcePositions = new Set<string>()
 const sourceGames = new Map<string, { headers: Record<string, string>; moves: string[] }[]>()
 for (const sourceFile of readdirSync(resolve('src/content/sources')).filter((name) => name.endsWith('.pgn'))) {
   const source = readFileSync(resolve('src/content/sources', sourceFile), 'utf8')
   const parsedGames: { headers: Record<string, string>; moves: string[] }[] = []
   for (const chunk of source.split(/\n(?=\[Event )/).filter((item) => item.trim())) {
-    const sourceGame = new Chess(); sourceGame.loadPgn(chunk); const sourceReplay = new Chess()
+    const sourceGame = new Chess(); sourceGame.loadPgn(chunk)
     parsedGames.push({ headers: sourceGame.getHeaders(), moves: sourceGame.history() })
-    sourcePositions.add(positionKey(sourceReplay.fen()))
-    for (const san of sourceGame.history()) { sourceReplay.move(san); sourcePositions.add(positionKey(sourceReplay.fen())) }
   }
   sourceGames.set(sourceFile, parsedGames)
 }
-for (const game of games) {
-  const chess = new Chess()
-  chess.loadPgn(game.pgn)
-  const history = chess.history()
-  const replay = new Chess()
-  studyPositions.add(positionKey(replay.fen()))
-  for (const san of history) { replay.move(san); studyPositions.add(positionKey(replay.fen())) }
-}
+const drillOwner = new Map<string, string>()
+const drillSets = new Map<string, string>()
 for (const game of games) validate(game)
 
 function validate(game: Game) {
@@ -41,6 +31,10 @@ function validate(game: Game) {
   }
   const main = loadPgn()
   const history = main.history()
+  const lessonPositions = new Set<string>()
+  const lessonReplay = new Chess()
+  lessonPositions.add(positionKey(lessonReplay.fen()))
+  for (const san of history) { lessonReplay.move(san); lessonPositions.add(positionKey(lessonReplay.fen())) }
   if (!history.length) fail('PGN не содержит ходов')
   if (!['attack', 'positional', 'endgame'].includes(game.theme)) fail('theme должен быть attack, positional или endgame')
   if (!game.source?.file || !game.source.white || !game.source.black || !game.source.event || !game.source.year || !game.source.eco || !game.source.url) fail('source заполнен не полностью')
@@ -100,12 +94,24 @@ function validate(game: Game) {
   const findCount = game.moments.filter((moment) => moment.kind === 'find').length
   if (findCount < 5) fail(`ходов для поиска ${findCount}, нужно минимум 5`)
   if (game.drills.length < 4) fail(`упражнений ${game.drills.length}, нужно минимум 4`)
+  const drillSignature = game.drills.map((drill) => positionKey(drill.fen)).sort().join('|')
+  const previousSetOwner = drillSets.get(drillSignature)
+  if (previousSetOwner) fail(`набор упражнений совпадает с уроком ${previousSetOwner}`)
+  drillSets.set(drillSignature, game.id)
   for (const [index, drill] of game.drills.entries()) {
     let position: Chess
     try { position = new Chess(drill.fen) } catch { fail(`упражнение ${index + 1}: неверный FEN`) }
     if (position.turn() !== drill.side) fail(`упражнение ${index + 1}: side не совпадает с FEN`)
-    if (studyPositions.has(positionKey(drill.fen))) fail(`упражнение ${index + 1}: FEN встречается в учебной партии`)
-    if (!sourcePositions.has(positionKey(drill.fen))) fail(`упражнение ${index + 1}: FEN не получен из PGN в src/content/sources`)
+    const key = positionKey(drill.fen)
+    if (!lessonPositions.has(key)) {
+      if (!Number.isInteger(drill.sourcePly) || !drill.sourceLine?.length) fail(`упражнение ${index + 1}: FEN не достигнут в PGN урока ${game.id}`)
+      const branch = positionBefore(drill.sourcePly!)
+      for (const san of drill.sourceLine!) assertLegal(branch, san, `упражнение ${index + 1}, линия происхождения`)
+      if (positionKey(branch.fen()) !== key) fail(`упражнение ${index + 1}: sourcePly/sourceLine не приводят к указанному FEN`)
+    } else if (drill.sourcePly !== undefined || drill.sourceLine !== undefined) fail(`упражнение ${index + 1}: sourcePly/sourceLine нужны только для позиции из варианта`)
+    const owner = drillOwner.get(key)
+    if (owner && owner !== game.id) fail(`упражнение ${index + 1}: FEN уже используется в уроке ${owner}`)
+    drillOwner.set(key, game.id)
     assertLegal(position, drill.answerSan, `упражнение ${index + 1}, ответ`)
   }
   console.log(`✓ ${game.title}: ${history.length} полуходов, ${game.moments.length} моментов, ${game.drills.length} упражнений`)

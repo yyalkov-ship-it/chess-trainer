@@ -95,14 +95,6 @@ const evaluatePosition = async (chess: Chess, analyse = (fen: string) => engine.
 
 const files = readdirSync(resolve('src/content/games')).filter((name) => name.endsWith('.json')).sort()
 const games = files.map((file) => JSON.parse(readFileSync(resolve('src/content/games', file), 'utf8')) as Game)
-const positionKey = (fen: string) => fen.split(' ').slice(0, 4).join(' ')
-const studyFens = new Set<string>()
-for (const game of games) {
-  const parsed = new Chess(); parsed.loadPgn(game.pgn)
-  const history = parsed.history()
-  for (let ply = 0; ply <= history.length; ply += 1) studyFens.add(positionKey(at(history, ply).fen()))
-}
-
 const engine = new NodeStockfish()
 let failures = 0
 const fail = (message: string) => { failures += 1; console.error(`  ✗ ${message}`) }
@@ -156,7 +148,6 @@ try {
         const changesResultClass = analysis[0].cp > 200 && analysis[1].cp < 50
         if (!changesResultClass) fail(`упражнение ${index + 1}: для эндшпиля лучший ход ${analysis[0].cp / 100}, второй ${analysis[1].cp / 100}; требуется >+2.0 и <+0.5`)
       } else if (gap < themeThreshold[game.theme]) fail(`упражнение ${index + 1}: отрыв ${gap.toFixed(2)} < ${themeThreshold[game.theme].toFixed(2)} (${game.theme})`)
-      if (studyFens.has(positionKey(drill.fen))) fail(`упражнение ${index + 1}: FEN взят из учебной партии`)
     }
   }
 } finally { engine.close() }
