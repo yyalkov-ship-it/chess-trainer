@@ -26,7 +26,7 @@ export class NodeStockfish {
     }
     this.send('stop'); throw new Error('Stockfish не ответил')
   }
-  async ready() { this.send('uci'); await this.waitFor((l) => l === 'uciok'); this.send('setoption name Threads value 4'); this.send('setoption name Hash value 256'); this.send('isready'); await this.waitFor((l) => l === 'readyok') }
+  async ready() { this.send('uci'); await this.waitFor((l) => l === 'uciok'); this.send('setoption name Threads value 1'); this.send('setoption name Hash value 256'); this.send('isready'); await this.waitFor((l) => l === 'readyok') }
   async analyse(fen: string, multiPv = 1, depth = 20): Promise<Pv[]> {
     this.lines.length = 0; this.send('setoption name Clear Hash'); this.send(`setoption name MultiPV value ${multiPv}`); this.send(`position fen ${fen}`); this.send(`go depth ${depth}`)
     const lines = await this.waitFor((l) => l.startsWith('bestmove ')); const results = new Map<number, Pv>()

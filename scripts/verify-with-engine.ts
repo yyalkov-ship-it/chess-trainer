@@ -53,7 +53,7 @@ class NodeStockfish {
     const banner = bannerLine ?? idName.replace(/^id name /, '')
     if (!/^Stockfish 18(?:\s|$)/.test(banner)) throw new Error(`Требуется Stockfish 18, получен: ${banner}`)
     console.log(`Движок: ${banner}`)
-    this.send('setoption name Threads value 4')
+    this.send('setoption name Threads value 1')
     this.send('setoption name Hash value 256')
     this.send('isready'); await this.waitFor((line) => line === 'readyok')
   }
@@ -107,7 +107,7 @@ try {
   if (terminalScore !== -100_000) throw new Error(`Неверная оценка мата: ${terminalScore}`)
   console.log('Терминальная позиция: проверка без вызова движка пройдена')
   await engine.ready()
-  console.log(`Stockfish: Threads 4, Hash 256 MB, depth ${ENGINE_DEPTH}`)
+  console.log(`Stockfish: Threads 1, Hash 256 MB, depth ${ENGINE_DEPTH}`)
   for (const game of games) {
     const parsed = new Chess(); parsed.loadPgn(game.pgn)
     const history = parsed.history()

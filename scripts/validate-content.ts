@@ -66,11 +66,13 @@ function validate(game: Game) {
 
   let previousPly = -1
   let momentsWithArrows = 0
+  const findMomentPositions = new Set<string>()
   const isSquare = (value: string) => /^[a-h][1-8]$/.test(value)
   for (const [index, moment] of game.moments.entries()) {
     if (moment.ply <= previousPly) fail(`моменты должны идти по возрастанию ply (индекс ${index})`)
     previousPly = moment.ply
     const position = positionBefore(moment.ply)
+    if (moment.kind === 'find') findMomentPositions.add(positionKey(position.fen()))
     const answerPosition = new Chess(position.fen())
     assertLegal(answerPosition, moment.answerSan, `момент ${index + 1}, ответ`)
     const actual = history[moment.ply]
@@ -103,6 +105,7 @@ function validate(game: Game) {
     try { position = new Chess(drill.fen) } catch { fail(`упражнение ${index + 1}: неверный FEN`) }
     if (position.turn() !== drill.side) fail(`упражнение ${index + 1}: side не совпадает с FEN`)
     const key = positionKey(drill.fen)
+    if (findMomentPositions.has(key)) fail(`упражнение ${index + 1}: FEN совпадает с моментом kind find этого же урока`)
     if (!lessonPositions.has(key)) {
       if (!Number.isInteger(drill.sourcePly) || !drill.sourceLine?.length) fail(`упражнение ${index + 1}: FEN не достигнут в PGN урока ${game.id}`)
       const branch = positionBefore(drill.sourcePly!)
