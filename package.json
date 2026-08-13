@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "validate:content": "tsx scripts/validate-content.ts",
+    "validate:content": "tsx scripts/check-board-safety.ts && tsx scripts/validate-content.ts",
     "verify:engine": "tsx scripts/verify-with-engine.ts"
   },
   "dependencies": {

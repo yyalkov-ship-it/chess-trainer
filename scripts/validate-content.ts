@@ -7,7 +7,7 @@ const directory = resolve('src/content/games')
 const files = readdirSync(directory).filter((name) => name.endsWith('.json')).sort()
 if (!files.length) throw new Error('В src/content/games нет партий')
 const games = files.map((file) => JSON.parse(readFileSync(resolve(directory, file), 'utf8')) as Game)
-const motifs = new Set<DrillMotif>(['mate', 'material', 'sacrifice', 'quiet', 'endgame', 'promotion'])
+const motifs = new Set<DrillMotif>(['mate', 'material', 'sacrifice', 'quiet', 'endgame', 'promotion', 'attack'])
 const puzzleIds = games.flatMap((game) => game.drills.map((_, index) => `${game.id}#${index}`))
 const drillTotal = games.reduce((sum, game) => sum + game.drills.length, 0)
 if (puzzleIds.length !== drillTotal) throw new Error(`Пул задач: ${puzzleIds.length}, сумма упражнений: ${drillTotal}`)
@@ -123,21 +123,21 @@ function validate(game: Game) {
     assertLegal(position, drill.answerSan, `упражнение ${index + 1}, ответ`)
     if (!motifs.has(drill.motif)) fail(`упражнение ${index + 1}: motif ${String(drill.motif)} не входит в перечисление`)
     const isPromotion = drill.answerSan.includes('=')
-    const isMate = drill.answerSan.endsWith('#')
     const isCapture = drill.answerSan.includes('x')
     const isCheck = /[+#]$/.test(drill.answerSan)
     if (drill.motif === 'promotion' && !isPromotion) fail(`упражнение ${index + 1}: motif promotion требует превращения в answerSan`)
     if (drill.motif === 'quiet' && (isCapture || isCheck || isPromotion)) fail(`упражнение ${index + 1}: motif quiet противоречит ходу ${drill.answerSan}: ход является взятием, шахом или превращением`)
+    const sidePrompt = drill.side === 'w' ? 'Ход белых' : 'Ход чёрных'
+    const oppositeSidePrompt = drill.side === 'w' ? 'Ход чёрных' : 'Ход белых'
+    if (!drill.prompt.includes(sidePrompt)) fail(`упражнение ${index + 1}: prompt должен содержать «${sidePrompt}»`)
+    if (drill.prompt.includes(oppositeSidePrompt)) fail(`упражнение ${index + 1}: prompt содержит неверную сторону «${oppositeSidePrompt}»`)
     const afterAnswer = new Chess(drill.fen); afterAnswer.move(drill.answerSan)
     const solverPieces = afterAnswer.board().flat().filter((piece) => piece?.color === drill.side).length
     const hasImmediateMaterialThreat = afterAnswer.moves().some((san) => {
       const reply = new Chess(afterAnswer.fen()); reply.move(san)
       return reply.board().flat().filter((piece) => piece?.color === drill.side).length < solverPieces
     })
-    if ((drill.motif === 'material' || drill.motif === 'sacrifice') && !(isCapture || isCheck || hasImmediateMaterialThreat)) fail(`упражнение ${index + 1}: motif ${drill.motif} требует взятия, шаха или немедленной угрозы`)
-    if (drill.motif === 'mate' && !isMate) {
-      // Мат в несколько ходов подтверждается обязательным движковым валидатором.
-    }
+    if ((drill.motif === 'material' || drill.motif === 'sacrifice' || drill.motif === 'attack') && !(isCapture || isCheck || hasImmediateMaterialThreat)) fail(`упражнение ${index + 1}: motif ${drill.motif} требует взятия, шаха или немедленной угрозы`)
   }
   console.log(`✓ ${game.title}: ${history.length} полуходов, ${game.moments.length} моментов, ${game.drills.length} упражнений`)
 }

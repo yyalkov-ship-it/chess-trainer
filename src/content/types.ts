@@ -13,7 +13,7 @@ export type Moment = {
   arrows?: { from: Square; to: Square; color: 'green' | 'red' | 'blue' }[]
   highlight?: Square[]
 }
-export type DrillMotif = 'mate' | 'material' | 'sacrifice' | 'quiet' | 'endgame' | 'promotion'
+export type DrillMotif = 'mate' | 'material' | 'sacrifice' | 'quiet' | 'endgame' | 'promotion' | 'attack'
 export type Drill = {
   fen: string
   side: 'w' | 'b'

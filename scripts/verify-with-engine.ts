@@ -102,6 +102,23 @@ const themeThreshold = { attack: 1.5, positional: 0.8, endgame: 0.6 } as const
 const pieceValue: Record<string, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 }
 const material = (chess: Chess, side: 'w' | 'b') => chess.board().flat().reduce((sum, piece) => sum + (piece && piece.color === side ? pieceValue[piece.type] : 0), 0)
 const balance = (chess: Chess, side: 'w' | 'b') => material(chess, side) - material(chess, side === 'w' ? 'b' : 'w')
+const scoreForSide = (score: Pv, sideToMove: 'w' | 'b', side: 'w' | 'b') => sideToMove === side ? score.cp : -score.cp
+
+const maxMaterialGainInBestLine = async (fen: string, answerSan: string, solver: 'w' | 'b') => {
+  const before = new Chess(fen)
+  const startBalance = balance(before, solver)
+  const line = new Chess(fen)
+  line.move(answerSan)
+  let bestGain = balance(line, solver) - startBalance
+  for (let ply = 1; ply < 4 && !line.isGameOver(); ply += 1) {
+    const analysis = await engine.analyse(line.fen())
+    const bestMove = analysis[0]?.moves[0]
+    if (!bestMove) break
+    line.move({ from: bestMove.slice(0, 2), to: bestMove.slice(2, 4), promotion: bestMove[4] ?? 'q' })
+    bestGain = Math.max(bestGain, balance(line, solver) - startBalance)
+  }
+  return bestGain
+}
 
 try {
   const terminal = new Chess()
@@ -125,16 +142,14 @@ try {
       for (const refutation of moment.refutations ?? []) {
         const wrong = new Chess(before.fen()); wrong.move(refutation.san)
         const lineFirst = refutation.line.trim().split(/\s+/)[0]
-        const refutationDepth = game.id === 'rotlewi-rubinstein-1907' && moment.ply === 43 && lineFirst === 'f5' ? 20 : ENGINE_DEPTH
-        const analysis = wrong.isGameOver() ? [] : await engine.analyse(wrong.fen(), 3, refutationDepth)
+        const analysis = wrong.isGameOver() ? [] : await engine.analyse(wrong.fen(), 3)
         if (!wrong.isGameOver() && !analysis[0]) throw new Error(`Stockfish не вернул варианты опровержения ${refutation.san} в позиции ${wrong.fen()}`)
         const wrongEval = wrong.isCheckmate() ? -100_000 : wrong.isDraw() ? 0 : analysis[0].cp
         const loss = (correctEval + wrongEval) / 100
         const candidates = analysis.map((pv) => ({ san: sanFromUci(wrong.fen(), pv.moves[0]), gap: (analysis[0].cp - pv.cp) / 100 }))
-        const explicitRotlewiCorrection = game.id === 'rotlewi-rubinstein-1907' && moment.ply === 43 && refutation.san === 'Qe7' && lineFirst === 'f5'
-        const accepted = explicitRotlewiCorrection || (wrong.isGameOver()
+        const accepted = wrong.isGameOver()
           ? refutation.line.trim() === ''
-          : candidates.some((candidate) => clean(candidate.san) === clean(lineFirst) && candidate.gap <= 0.5))
+          : candidates.some((candidate) => clean(candidate.san) === clean(lineFirst) && candidate.gap <= 0.5)
         console.log(`  ply ${moment.ply} ${refutation.san}: потеря ${loss.toFixed(2)}, ответ ${lineFirst}, топ-3 ${candidates.map((item) => `${item.san}(${item.gap.toFixed(2)})`).join(', ')}`)
         const threshold = themeThreshold[game.theme]
         if (loss < threshold) fail(`ply ${moment.ply} ${refutation.san}: потеря ${loss.toFixed(2)} < ${threshold.toFixed(2)} (${game.theme})`)
@@ -149,17 +164,24 @@ try {
       const solver = before.turn()
       const after = new Chess(drill.fen); after.move(drill.answerSan)
       const replyAnalysis = after.isGameOver() ? [] : await engine.analyse(after.fen())
-      const afterReply = new Chess(after.fen())
-      if (replyAnalysis[0]?.moves[0]) afterReply.move({ from: replyAnalysis[0].moves[0].slice(0, 2), to: replyAnalysis[0].moves[0].slice(2, 4), promotion: replyAnalysis[0].moves[0][4] ?? 'q' })
-      const materialGain = balance(afterReply, solver) - balance(before, solver)
-      const sacrificed = material(afterReply, solver) < material(before, solver)
+      const materialGain = await maxMaterialGainInBestLine(drill.fen, drill.answerSan, solver)
+      const sacrificed = material(after, solver) < material(before, solver)
+      const scoreAfterForSolver = after.isCheckmate()
+        ? 100_000
+        : after.isDraw()
+          ? 0
+          : replyAnalysis[0]
+            ? scoreForSide(replyAnalysis[0], after.turn(), solver)
+            : 0
+      const sacrificeKeepsEvaluation = scoreAfterForSolver >= 100 || replyAnalysis[0]?.mate === true
       const pieceCount = before.board().flat().filter(Boolean).length
-      console.log(`  упражнение ${index + 1} [${drill.motif}]: ${first}, отрыв ${gap.toFixed(2)}`)
+      console.log(`  упражнение ${index + 1} [${drill.motif}]: ${first}, отрыв ${gap.toFixed(2)}, материал ${materialGain}`)
       if (clean(first) !== clean(drill.answerSan)) fail(`упражнение ${index + 1}: ответ ${drill.answerSan}, движок ${first}`)
       if (drill.motif === 'mate' && !analysis[0].mate) fail(`упражнение ${index + 1}: motif mate, но оценка лучшего хода не матовая`)
       if (drill.motif === 'sacrifice' && !sacrificed) fail(`упражнение ${index + 1}: motif sacrifice, но после лучшего ответа материал решающей стороны не уменьшился`)
-      if (drill.motif === 'sacrifice' && analysis[0].cp <= -100_000) fail(`упражнение ${index + 1}: motif sacrifice, но оценка не сохраняется за решающего`)
-      if (drill.motif === 'material' && materialGain < 2 && !/[x+#]/.test(drill.answerSan)) fail(`упражнение ${index + 1}: motif material, баланс улучшился на ${materialGain}, требуется не меньше 2`)
+      if (drill.motif === 'sacrifice' && !sacrificeKeepsEvaluation) fail(`упражнение ${index + 1}: motif sacrifice, но оценка за решающего ${(scoreAfterForSolver / 100).toFixed(2)}, требуется не ниже +1.0 или матовая`)
+      if (drill.motif === 'material' && materialGain < 2) fail(`упражнение ${index + 1}: motif material, баланс улучшился на ${materialGain}, требуется не меньше 2`)
+      if (drill.motif === 'attack' && scoreAfterForSolver < 0 && !replyAnalysis[0]?.mate) fail(`упражнение ${index + 1}: motif attack, но оценка за решающего ${(scoreAfterForSolver / 100).toFixed(2)} хуже равенства`)
       if (drill.motif === 'endgame' && pieceCount > 10) fail(`упражнение ${index + 1}: motif endgame, фигур ${pieceCount}, требуется не больше 10`)
       if (game.theme === 'endgame') {
         const changesResultClass = analysis[0].cp > 200 && analysis[1].cp < 50

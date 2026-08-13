@@ -29,9 +29,9 @@ function gamePlyCount(game: Game) {
   return chess.history().length
 }
 
-type BoardProps = { chess: Chess; movable: boolean; onMove: (from: Key, to: Key) => void; flash: 'right' | 'wrong' | null; orientation?: 'white' | 'black'; lastMove?: Key[]; moment?: Moment }
+type BoardProps = { chess: Chess; movable: boolean; onMove: (from: Key, to: Key) => void; flash: 'right' | 'wrong' | null; orientation?: 'white' | 'black'; lastMove?: Key[]; moment?: Moment; revision?: number }
 
-function Board({ chess, movable, onMove, flash, orientation = 'white', lastMove, moment }: BoardProps) {
+function Board({ chess, movable, onMove, flash, orientation = 'white', lastMove, moment, revision = 0 }: BoardProps) {
   const ref = useRef<HTMLDivElement>(null)
   const api = useRef<Api | null>(null)
   useEffect(() => {
@@ -51,7 +51,7 @@ function Board({ chess, movable, onMove, flash, orientation = 'white', lastMove,
       fen: chess.fen(),
       orientation,
       turnColor: chess.turn() === 'w' ? 'white' : 'black',
-      movable: { color: movable ? (chess.turn() === 'w' ? 'white' : 'black') : undefined, dests, events: { after: onMove } },
+      movable: { free: false, color: movable ? (chess.turn() === 'w' ? 'white' : 'black') : undefined, dests, events: { after: onMove } },
       lastMove,
       highlight: { lastMove: true, check: true },
       drawable: { autoShapes: [
@@ -59,7 +59,7 @@ function Board({ chess, movable, onMove, flash, orientation = 'white', lastMove,
         ...(moment?.highlight ?? []).map((square) => ({ orig: square as Key, brush: 'blue' })),
       ] },
     })
-  }, [chess, movable, onMove, orientation, lastMove, moment])
+  }, [chess, movable, onMove, orientation, lastMove, moment, revision])
   return <div className={`board-wrap ${flash ? `flash-${flash}` : ''}`}><div ref={ref} className="cg-board-host" /></div>
 }
 
@@ -70,6 +70,7 @@ function PlayMode({ initialFen, heroColor, onExit }: { initialFen: string; heroC
   const heroName = heroColor === 'w' ? 'белыми' : 'чёрными'
   const [message, setMessage] = useState(`Ты играешь ${heroName}. Сделай ход.`)
   const [evaluation, setEvaluation] = useState(0)
+  const [boardRevision, setBoardRevision] = useState(0)
   const history = useRef<string[]>([initialFen])
 
   const updateEvaluation = async (position: Chess) => {
@@ -83,7 +84,7 @@ function PlayMode({ initialFen, heroColor, onExit }: { initialFen: string; heroC
   const onMove = async (from: Key, to: Key) => {
     if (thinking || chess.turn() !== heroColor || chess.isGameOver()) return
     const next = new Chess(chess.fen())
-    if (!next.move({ from, to, promotion: 'q' })) return
+    if (!next.move({ from, to, promotion: 'q' })) { setBoardRevision((value) => value + 1); return }
     history.current.push(next.fen())
     setChess(next)
     if (next.isGameOver()) { setMessage('Партия закончена.'); return }
@@ -116,7 +117,7 @@ function PlayMode({ initialFen, heroColor, onExit }: { initialFen: string; heroC
   return <main className="lesson-shell">
     <header className="lesson-top"><button className="back" onClick={onExit}>← К разбору</button><span>Игра с компьютером</span><strong>{level} Эло</strong></header>
     <div className="eval-track" aria-label="Оценка позиции"><span style={{ width: `${whiteShare}%` }} /></div>
-    <Board chess={chess} orientation={heroColor === 'w' ? 'white' : 'black'} movable={!thinking && chess.turn() === heroColor && !chess.isGameOver()} onMove={onMove} flash={null} />
+    <Board chess={chess} orientation={heroColor === 'w' ? 'white' : 'black'} movable={!thinking && chess.turn() === heroColor && !chess.isGameOver()} onMove={onMove} flash={null} revision={boardRevision} />
     <section className="coach-card play-card">
       <span className="eyebrow">Доигрывание</span><h2>{message}</h2>
       <label>Сила соперника<select value={level} disabled={thinking} onChange={(event) => setLevel(Number(event.target.value) as 1200 | 1500 | 1800)}><option value={1200}>1200</option><option value={1500}>1500</option><option value={1800}>1800</option></select></label>
@@ -139,6 +140,7 @@ function Lesson({ game, onExit, onComplete }: { game: Game; onExit: () => void; 
   const [playFen, setPlayFen] = useState<string | null>(null)
   const [engineBusy, setEngineBusy] = useState(false)
   const [refutationPlayback, setRefutationPlayback] = useState<RefutationPlayback | null>(null)
+  const [boardRevision, setBoardRevision] = useState(0)
   const chess = useMemo(() => positionAt(history, ply), [history, ply])
   const moment = game.moments.find((item) => item.ply === ply)
   const mustFind = moment?.kind === 'find' && !solved.includes(ply)
@@ -168,7 +170,7 @@ function Lesson({ game, onExit, onComplete }: { game: Game; onExit: () => void; 
     if (!mustFind || !moment) return
     const trial = positionAt(history, ply)
     const move = trial.move({ from, to, promotion: 'q' })
-    if (!move) return
+    if (!move) { setBoardRevision((value) => value + 1); return }
     const accepted = [moment.answerSan, ...(moment.altAcceptable ?? [])].includes(move.san)
     if (accepted) {
       registerStudyDay()
@@ -244,7 +246,7 @@ function Lesson({ game, onExit, onComplete }: { game: Game; onExit: () => void; 
   if (playFen) return <PlayMode initialFen={playFen} heroColor={game.heroColor} onExit={() => setPlayFen(null)} />
   return <main className="lesson-shell">
     <header className="lesson-top"><button className="back" onClick={onExit}>← Выйти</button><span>{ply}/{history.length}</span><strong>{score} очков</strong></header>
-    <Board chess={displayedChess} orientation={game.heroColor === 'w' ? 'white' : 'black'} movable={Boolean(mustFind && !refutationPlayback)} onMove={onMove} flash={flash} lastMove={playbackLastMove} moment={refutationPlayback || (moment?.kind === 'find' && !solved.includes(ply)) ? undefined : moment} />
+    <Board chess={displayedChess} orientation={game.heroColor === 'w' ? 'white' : 'black'} movable={Boolean(mustFind && !refutationPlayback)} onMove={onMove} flash={flash} lastMove={playbackLastMove} moment={refutationPlayback || (moment?.kind === 'find' && !solved.includes(ply)) ? undefined : moment} revision={boardRevision} />
     <section className="coach-card">
       <span className="eyebrow">{mustFind ? `Твоя очередь · попытка ${attempts + 1} из 3` : moment ? 'Разбор позиции' : 'Ходы партии'}</span>
       <h2>{mustFind ? moment?.prompt : moment?.prompt ?? 'Следи, как развивается партия'}</h2>
@@ -273,6 +275,7 @@ function PuzzleBoard({ fen, prompt, answerSan, explanation, onDone, allowReveal 
   const [feedback, setFeedback] = useState<string | null>(null)
   const [finished, setFinished] = useState(false)
   const [lastMove, setLastMove] = useState<Key[] | undefined>()
+  const [boardRevision, setBoardRevision] = useState(0)
   const finish = (correct: boolean) => {
     if (finished) return
     const answer = new Chess(fen)
@@ -285,10 +288,10 @@ function PuzzleBoard({ fen, prompt, answerSan, explanation, onDone, allowReveal 
     if (finished) return
     const trial = new Chess(fen)
     const move = trial.move({ from, to, promotion: 'q' })
-    if (!move) return
+    if (!move) { setBoardRevision((value) => value + 1); return }
     finish(move.san === answerSan)
   }
-  return <><Board chess={chess} orientation={initial.turn() === 'w' ? 'white' : 'black'} movable={!finished} onMove={onMove} flash={finished ? (feedback?.startsWith('Верно') ? 'right' : 'wrong') : null} lastMove={lastMove} /><section className="coach-card"><span className="eyebrow">Найди ход</span><h2>{prompt}</h2>{feedback ? <p className="feedback">{feedback}</p> : <p>Сделай ход на доске.</p>}{allowReveal && !finished && <button className="secondary" onClick={() => finish(false)}>Показать ответ</button>}{finished && footer}</section></>
+  return <><Board chess={chess} orientation={initial.turn() === 'w' ? 'white' : 'black'} movable={!finished} onMove={onMove} flash={finished ? (feedback?.startsWith('Верно') ? 'right' : 'wrong') : null} lastMove={lastMove} revision={boardRevision} /><section className="coach-card"><span className="eyebrow">Найди ход</span><h2>{prompt}</h2>{feedback ? <p className="feedback">{feedback}</p> : <p>Сделай ход на доске.</p>}{allowReveal && !finished && <button className="secondary" onClick={() => finish(false)}>Показать ответ</button>}{finished && footer}</section></>
 }
 
 function Drills({ game, onExit }: { game: Game; onExit: () => void }) {
@@ -313,6 +316,7 @@ function PuzzleMenu({ onExit, onStart }: { onExit: () => void; onStart: (queue: 
   const [chooseMotif, setChooseMotif] = useState(false)
   const store = loadStore()
   const filtered = puzzles.filter((puzzle) => !level || puzzle.level === level)
+  const availableMotifs = puzzleMotifs.map((motif) => ({ motif, count: filtered.filter((puzzle) => puzzle.motif === motif).length })).filter((item) => item.count > 0)
   const startRandom = () => onStart(practiceQueue(seededShuffle(filtered, `${Date.now()}`), store.puzzles), `Случайные задачи · ${Math.min(10, filtered.length)} из ${filtered.length}`, 'random')
   const startMotif = (motif: DrillMotif) => {
     const pool = filtered.filter((puzzle) => puzzle.motif === motif)
@@ -323,8 +327,8 @@ function PuzzleMenu({ onExit, onStart }: { onExit: () => void; onStart: (queue: 
     const ids = store.daily?.date === day ? store.daily.ids : dailyPuzzleIds(puzzles, day)
     onStart(ids.map((id) => puzzles.find((puzzle) => puzzle.id === id)!).filter(Boolean), 'Испытание дня', 'daily')
   }
-  const startMarathon = () => onStart(seededShuffle(puzzles, `${Date.now()}-marathon`), 'Марафон', 'marathon')
-  return <main className="shell"><button className="back" onClick={onExit}>← На главную</button><section className="hero intro"><span className="eyebrow">Тренировка</span><h1>Задачи</h1><p>Выбери короткую тренировку или проверь, сколько решений подряд тебе по силам.</p></section><label className="level-filter">Уровень<select value={level} onChange={(event) => setLevel(Number(event.target.value) as 0 | 1 | 2 | 3)}><option value={0}>все</option><option value={1}>1</option><option value={2}>2</option><option value={3}>3</option></select></label><div className="mode-list"><button onClick={startRandom}><strong>Случайные задачи</strong><small>{Math.min(10, filtered.length)} из {filtered.length} в этом уровне</small></button><button onClick={() => setChooseMotif((value) => !value)}><strong>По мотиву</strong><small>Шесть проверяемых типов задач</small></button>{chooseMotif && <div className="motif-list">{puzzleMotifs.map((motif) => { const count = filtered.filter((puzzle) => puzzle.motif === motif).length; return <button key={motif} disabled={!count} onClick={() => startMotif(motif)}><span>{motifLabels[motif]}</span><b>{count}</b></button> })}</div>}<button onClick={startDaily}><strong>Испытание дня</strong><small>{store.daily?.date === dateKey() && store.daily.index >= 5 ? `Сегодня завершено: ${store.daily.correct} из 5` : 'Один набор из 5 задач на сегодня'}</small></button><button onClick={startMarathon}><strong>Марафон</strong><small>Рекорд: {store.marathonRecord}</small></button></div></main>
+  const startMarathon = () => onStart(seededShuffle(filtered, `${Date.now()}-marathon`), 'Марафон', 'marathon')
+  return <main className="shell"><button className="back" onClick={onExit}>← На главную</button><section className="hero intro"><span className="eyebrow">Тренировка</span><h1>Задачи</h1><p>Выбери короткую тренировку или проверь, сколько решений подряд тебе по силам.</p></section><label className="level-filter">Уровень<select value={level} onChange={(event) => setLevel(Number(event.target.value) as 0 | 1 | 2 | 3)}><option value={0}>все</option><option value={1}>1</option><option value={2}>2</option><option value={3}>3</option></select></label><div className="mode-list"><button onClick={startRandom}><strong>Случайные задачи</strong><small>{Math.min(10, filtered.length)} из {filtered.length} в этом уровне</small></button><button onClick={() => setChooseMotif((value) => !value)}><strong>По мотиву</strong><small>{availableMotifs.length} доступных типов задач</small></button>{chooseMotif && <div className="motif-list">{availableMotifs.map(({ motif, count }) => <button key={motif} onClick={() => startMotif(motif)}><span>{motifLabels[motif]}</span><b>{count}</b></button>)}</div>}<button onClick={startDaily}><strong>Испытание дня</strong><small>{store.daily?.date === dateKey() && store.daily.index >= 5 ? `Сегодня завершено: ${store.daily.correct} из 5` : 'Один набор из 5 задач на сегодня'}</small></button><button onClick={startMarathon}><strong>Марафон</strong><small>Рекорд: {store.marathonRecord}</small></button></div></main>
 }
 
 function PuzzleRun({ queue, title, kind, onHome, onAgain }: { queue: Puzzle[]; title: string; kind: RunKind; onHome: () => void; onAgain: (queue: Puzzle[]) => void }) {
@@ -335,8 +339,9 @@ function PuzzleRun({ queue, title, kind, onHome, onAgain }: { queue: Puzzle[]; t
   const [correct, setCorrect] = useState(kind === 'daily' && savedDaily?.date === day ? savedDaily.correct : 0)
   const [wrong, setWrong] = useState<Puzzle[]>([])
   const [answer, setAnswer] = useState<boolean | null>(null)
+  const [showMarathonResult, setShowMarathonResult] = useState(false)
   const puzzle = queue[index]
-  const stopped = kind === 'marathon' && answer === false
+  const stopped = kind === 'marathon' && showMarathonResult
   const complete = !puzzle || stopped
   const finishAnswer = (ok: boolean) => {
     if (!puzzle || answer !== null) return
@@ -347,9 +352,9 @@ function PuzzleRun({ queue, title, kind, onHome, onAgain }: { queue: Puzzle[]; t
     if (kind === 'daily') saveDaily({ date: day, ids: queue.map((item) => item.id), index: index + 1, correct: correct + (ok ? 1 : 0) })
     if (kind === 'marathon') saveMarathonRecord(correct + (ok ? 1 : 0))
   }
-  const next = () => { setAnswer(null); setIndex((value) => value + 1) }
+  const next = () => { setAnswer(null); setShowMarathonResult(false); setIndex((value) => value + 1) }
   if (complete) return <main className="shell"><section className="hero intro"><span className="eyebrow">{kind === 'marathon' ? 'Серия завершена' : 'Сессия завершена'}</span><h1>{kind === 'marathon' ? `${correct} подряд` : `${correct} из ${queue.length}`}</h1>{wrong.length > 0 && <div className="wrong-list"><h2>Повтори ошибки</h2>{wrong.map((item) => <span key={item.id}>{item.gameTitle} · {motifLabels[item.motif]}</span>)}<button className="primary" onClick={() => onAgain(wrong)}>Прорешать сейчас</button></div>}<div className="result-actions">{kind === 'daily' ? <p>Испытание пройдено. Вернись завтра за новым набором.</p> : <button className="primary" onClick={() => onAgain(queue)}>Ещё раз</button>}<button className="secondary" onClick={onHome}>На главную</button></div></section></main>
-  return <main className="lesson-shell"><header className="lesson-top puzzle-top"><button className="back" onClick={onHome}>← Выйти</button><span>Задача {index + 1}/{kind === 'marathon' ? '∞' : queue.length}</span><strong>{correct} верно</strong></header><div className="puzzle-meta"><span>{title}</span><b>{motifLabels[puzzle.motif]} · уровень {puzzle.level}</b></div><PuzzleBoard key={puzzle.id} {...puzzle} allowReveal onDone={finishAnswer} footer={<>{answer !== null && <p className="source-game">Из партии: {puzzle.gameTitle}</p>}{answer !== null && kind !== 'marathon' && <button className="primary" onClick={next}>Следующая задача</button>}{answer === true && kind === 'marathon' && <button className="primary" onClick={next}>Продолжить марафон</button>}</>} /></main>
+  return <main className="lesson-shell"><header className="lesson-top puzzle-top"><button className="back" onClick={onHome}>← Выйти</button><span>Задача {index + 1}/{kind === 'marathon' ? '∞' : queue.length}</span><strong>{correct} верно</strong></header><div className="puzzle-meta"><span>{title}</span><b>{motifLabels[puzzle.motif]} · уровень {puzzle.level}</b></div><PuzzleBoard key={puzzle.id} {...puzzle} allowReveal onDone={finishAnswer} footer={<>{answer !== null && <p className="source-game">Из партии: {puzzle.gameTitle}</p>}{answer !== null && kind !== 'marathon' && <button className="primary" onClick={next}>Следующая задача</button>}{answer === true && kind === 'marathon' && <button className="primary" onClick={next}>Продолжить марафон</button>}{answer === false && kind === 'marathon' && <button className="primary" onClick={() => setShowMarathonResult(true)}>Показать итог</button>}</>} /></main>
 }
 
 function Result({ game, onHome, onDrills }: { game: Game; onHome: () => void; onDrills: () => void }) {

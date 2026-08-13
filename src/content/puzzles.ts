@@ -26,6 +26,7 @@ export const motifLabels: Record<DrillMotif, string> = {
   quiet: 'Тихий ход',
   endgame: 'Эндшпиль',
   promotion: 'Превращение пешки',
+  attack: 'Форсированный ход',
 }
 
 export const puzzleMotifs = Object.keys(motifLabels) as DrillMotif[]
