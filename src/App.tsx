@@ -7,11 +7,14 @@ import '@lichess-org/chessground/assets/chessground.base.css'
 import '@lichess-org/chessground/assets/chessground.brown.css'
 import '@lichess-org/chessground/assets/chessground.cburnett.css'
 import { games } from './content/games'
-import type { Game, Moment } from './content/types'
-import { addMistake, loadStore, registerStudyDay, reviewMistake, saveProgress, type MistakeTask } from './storage'
+import { motifLabels, puzzleMotifs, puzzles, type Puzzle } from './content/puzzles'
+import type { DrillMotif, Game, Moment } from './content/types'
+import { dailyPuzzleIds, dateKey, practiceQueue, seededShuffle } from './puzzle-queue'
+import { addMistake, loadStore, recordPuzzle, registerStudyDay, reviewMistake, saveDaily, saveMarathonRecord, saveProgress, type MistakeTask } from './storage'
 import { engine, heroEvaluation, humanEvaluation, uciToMove } from './engine'
 
-type Screen = { name: 'home' } | { name: 'intro'; game: Game } | { name: 'lesson'; game: Game } | { name: 'result'; game: Game } | { name: 'drills'; game: Game } | { name: 'mistakes' }
+type RunKind = 'random' | 'motif' | 'daily' | 'marathon'
+type Screen = { name: 'home' } | { name: 'intro'; game: Game } | { name: 'lesson'; game: Game } | { name: 'result'; game: Game } | { name: 'drills'; game: Game } | { name: 'mistakes' } | { name: 'puzzles' } | { name: 'puzzleRun'; queue: Puzzle[]; title: string; kind: RunKind }
 type RefutationPlayback = { moves: string[]; shown: number; why: string }
 
 function positionAt(history: string[], ply: number) {
@@ -264,21 +267,28 @@ function Lesson({ game, onExit, onComplete }: { game: Game; onExit: () => void; 
   </main>
 }
 
-function PuzzleBoard({ fen, prompt, answerSan, explanation, onDone }: { fen: string; prompt: string; answerSan: string; explanation: string; onDone: (correct: boolean) => void }) {
-  const chess = useMemo(() => new Chess(fen), [fen])
+function PuzzleBoard({ fen, prompt, answerSan, explanation, onDone, allowReveal = false, footer }: { fen: string; prompt: string; answerSan: string; explanation: string; onDone: (correct: boolean) => void; allowReveal?: boolean; footer?: React.ReactNode }) {
+  const initial = useMemo(() => new Chess(fen), [fen])
+  const [chess, setChess] = useState(initial)
   const [feedback, setFeedback] = useState<string | null>(null)
   const [finished, setFinished] = useState(false)
+  const [lastMove, setLastMove] = useState<Key[] | undefined>()
+  const finish = (correct: boolean) => {
+    if (finished) return
+    const answer = new Chess(fen)
+    const move = answer.move(answerSan)
+    setChess(answer); setLastMove([move.from as Key, move.to as Key])
+    setFeedback(correct ? `Верно! ${explanation}` : `Правильный ход: ${answerSan}. ${explanation}`)
+    setFinished(true); onDone(correct)
+  }
   const onMove = (from: Key, to: Key) => {
     if (finished) return
     const trial = new Chess(fen)
     const move = trial.move({ from, to, promotion: 'q' })
     if (!move) return
-    const correct = move.san === answerSan
-    setFeedback(correct ? `Верно! ${explanation}` : `Пока нет. Правильный ход: ${answerSan}. ${explanation}`)
-    setFinished(true)
-    onDone(correct)
+    finish(move.san === answerSan)
   }
-  return <><Board chess={chess} orientation={chess.turn() === 'w' ? 'white' : 'black'} movable={!finished} onMove={onMove} flash={finished ? (feedback?.startsWith('Верно') ? 'right' : 'wrong') : null} /><section className="coach-card"><span className="eyebrow">Найди ход</span><h2>{prompt}</h2>{feedback ? <p className="feedback">{feedback}</p> : <p>Сделай ход на доске.</p>}</section></>
+  return <><Board chess={chess} orientation={initial.turn() === 'w' ? 'white' : 'black'} movable={!finished} onMove={onMove} flash={finished ? (feedback?.startsWith('Верно') ? 'right' : 'wrong') : null} lastMove={lastMove} /><section className="coach-card"><span className="eyebrow">Найди ход</span><h2>{prompt}</h2>{feedback ? <p className="feedback">{feedback}</p> : <p>Сделай ход на доске.</p>}{allowReveal && !finished && <button className="secondary" onClick={() => finish(false)}>Показать ответ</button>}{finished && footer}</section></>
 }
 
 function Drills({ game, onExit }: { game: Game; onExit: () => void }) {
@@ -293,9 +303,53 @@ function Mistakes({ onExit }: { onExit: () => void }) {
   const [tasks, setTasks] = useState<MistakeTask[]>(() => Object.values(loadStore().mistakes).sort((a, b) => a.dueAt - b.dueAt))
   const [index, setIndex] = useState(0)
   const task = tasks[index]
-  if (!task) return <main className="shell"><button className="back" onClick={onExit}>← На главную</button><section className="hero intro"><span className="eyebrow">Работа над ошибками</span><h1>Всё чисто</h1><p>Сейчас нет позиций для повторения. Новые появятся после ошибок в уроке.</p></section></main>
+  if (!task) return <main className="shell"><button className="back" onClick={onExit}>← На главную</button><section className="hero intro"><span className="eyebrow">Работа над ошибками</span><h1>Всё чисто</h1><p>Сейчас нет позиций для повторения. Новые появятся после ошибок в уроках и задачах.</p></section></main>
   const due = task.dueAt <= Date.now()
-  return <main className="lesson-shell"><header className="lesson-top"><button className="back" onClick={onExit}>← Выйти</button><span>{index + 1}/{tasks.length}</span><strong>{due ? 'Пора повторить' : `через ${Math.max(1, Math.ceil((task.dueAt - Date.now()) / 86_400_000))} дн.`}</strong></header>{due ? <PuzzleBoard key={task.id} fen={task.fen} prompt={task.prompt} answerSan={task.answerSan} explanation={task.explanation} onDone={(correct) => { reviewMistake(task.id, correct); window.setTimeout(() => { const next = Object.values(loadStore().mistakes).sort((a, b) => a.dueAt - b.dueAt); setTasks(next); setIndex(0) }, 1200) }} /> : <section className="coach-card"><span className="eyebrow">Следующее повторение</span><h2>Возвращайся позже</h2><p>Интервалы растут: один день, три дня, затем неделя. После двух верных решений подряд позиция уйдёт из списка.</p></section>}</main>
+  return <main className="lesson-shell"><header className="lesson-top"><button className="back" onClick={onExit}>← Выйти</button><span>{task.origin === 'puzzle' ? 'Задача' : 'Урок'} · {index + 1}/{tasks.length}</span><strong>{due ? 'Пора повторить' : `через ${Math.max(1, Math.ceil((task.dueAt - Date.now()) / 86_400_000))} дн.`}</strong></header>{due ? <PuzzleBoard key={task.id} fen={task.fen} prompt={task.prompt} answerSan={task.answerSan} explanation={task.explanation} onDone={(correct) => { reviewMistake(task.id, correct); window.setTimeout(() => { const next = Object.values(loadStore().mistakes).sort((a, b) => a.dueAt - b.dueAt); setTasks(next); setIndex(0) }, 1200) }} /> : <section className="coach-card"><span className="eyebrow">Следующее повторение</span><h2>Возвращайся позже</h2><p>Интервалы растут: один день, три дня, затем неделя. После двух верных решений подряд позиция уйдёт из списка.</p></section>}</main>
+}
+
+function PuzzleMenu({ onExit, onStart }: { onExit: () => void; onStart: (queue: Puzzle[], title: string, kind: RunKind) => void }) {
+  const [level, setLevel] = useState<0 | 1 | 2 | 3>(0)
+  const [chooseMotif, setChooseMotif] = useState(false)
+  const store = loadStore()
+  const filtered = puzzles.filter((puzzle) => !level || puzzle.level === level)
+  const startRandom = () => onStart(practiceQueue(seededShuffle(filtered, `${Date.now()}`), store.puzzles), `Случайные задачи · ${Math.min(10, filtered.length)} из ${filtered.length}`, 'random')
+  const startMotif = (motif: DrillMotif) => {
+    const pool = filtered.filter((puzzle) => puzzle.motif === motif)
+    onStart(practiceQueue(seededShuffle(pool, `${Date.now()}-${motif}`), store.puzzles), motifLabels[motif], 'motif')
+  }
+  const startDaily = () => {
+    const day = dateKey()
+    const ids = store.daily?.date === day ? store.daily.ids : dailyPuzzleIds(puzzles, day)
+    onStart(ids.map((id) => puzzles.find((puzzle) => puzzle.id === id)!).filter(Boolean), 'Испытание дня', 'daily')
+  }
+  const startMarathon = () => onStart(seededShuffle(puzzles, `${Date.now()}-marathon`), 'Марафон', 'marathon')
+  return <main className="shell"><button className="back" onClick={onExit}>← На главную</button><section className="hero intro"><span className="eyebrow">Тренировка</span><h1>Задачи</h1><p>Выбери короткую тренировку или проверь, сколько решений подряд тебе по силам.</p></section><label className="level-filter">Уровень<select value={level} onChange={(event) => setLevel(Number(event.target.value) as 0 | 1 | 2 | 3)}><option value={0}>все</option><option value={1}>1</option><option value={2}>2</option><option value={3}>3</option></select></label><div className="mode-list"><button onClick={startRandom}><strong>Случайные задачи</strong><small>{Math.min(10, filtered.length)} из {filtered.length} в этом уровне</small></button><button onClick={() => setChooseMotif((value) => !value)}><strong>По мотиву</strong><small>Шесть проверяемых типов задач</small></button>{chooseMotif && <div className="motif-list">{puzzleMotifs.map((motif) => { const count = filtered.filter((puzzle) => puzzle.motif === motif).length; return <button key={motif} disabled={!count} onClick={() => startMotif(motif)}><span>{motifLabels[motif]}</span><b>{count}</b></button> })}</div>}<button onClick={startDaily}><strong>Испытание дня</strong><small>{store.daily?.date === dateKey() && store.daily.index >= 5 ? `Сегодня завершено: ${store.daily.correct} из 5` : 'Один набор из 5 задач на сегодня'}</small></button><button onClick={startMarathon}><strong>Марафон</strong><small>Рекорд: {store.marathonRecord}</small></button></div></main>
+}
+
+function PuzzleRun({ queue, title, kind, onHome, onAgain }: { queue: Puzzle[]; title: string; kind: RunKind; onHome: () => void; onAgain: (queue: Puzzle[]) => void }) {
+  const savedDaily = loadStore().daily
+  const day = dateKey()
+  const initialIndex = kind === 'daily' && savedDaily?.date === day ? savedDaily.index : 0
+  const [index, setIndex] = useState(initialIndex)
+  const [correct, setCorrect] = useState(kind === 'daily' && savedDaily?.date === day ? savedDaily.correct : 0)
+  const [wrong, setWrong] = useState<Puzzle[]>([])
+  const [answer, setAnswer] = useState<boolean | null>(null)
+  const puzzle = queue[index]
+  const stopped = kind === 'marathon' && answer === false
+  const complete = !puzzle || stopped
+  const finishAnswer = (ok: boolean) => {
+    if (!puzzle || answer !== null) return
+    recordPuzzle(puzzle, ok)
+    setAnswer(ok)
+    if (ok) setCorrect((value) => value + 1)
+    else setWrong((items) => [...items, puzzle])
+    if (kind === 'daily') saveDaily({ date: day, ids: queue.map((item) => item.id), index: index + 1, correct: correct + (ok ? 1 : 0) })
+    if (kind === 'marathon') saveMarathonRecord(correct + (ok ? 1 : 0))
+  }
+  const next = () => { setAnswer(null); setIndex((value) => value + 1) }
+  if (complete) return <main className="shell"><section className="hero intro"><span className="eyebrow">{kind === 'marathon' ? 'Серия завершена' : 'Сессия завершена'}</span><h1>{kind === 'marathon' ? `${correct} подряд` : `${correct} из ${queue.length}`}</h1>{wrong.length > 0 && <div className="wrong-list"><h2>Повтори ошибки</h2>{wrong.map((item) => <span key={item.id}>{item.gameTitle} · {motifLabels[item.motif]}</span>)}<button className="primary" onClick={() => onAgain(wrong)}>Прорешать сейчас</button></div>}<div className="result-actions">{kind === 'daily' ? <p>Испытание пройдено. Вернись завтра за новым набором.</p> : <button className="primary" onClick={() => onAgain(queue)}>Ещё раз</button>}<button className="secondary" onClick={onHome}>На главную</button></div></section></main>
+  return <main className="lesson-shell"><header className="lesson-top puzzle-top"><button className="back" onClick={onHome}>← Выйти</button><span>Задача {index + 1}/{kind === 'marathon' ? '∞' : queue.length}</span><strong>{correct} верно</strong></header><div className="puzzle-meta"><span>{title}</span><b>{motifLabels[puzzle.motif]} · уровень {puzzle.level}</b></div><PuzzleBoard key={puzzle.id} {...puzzle} allowReveal onDone={finishAnswer} footer={<>{answer !== null && <p className="source-game">Из партии: {puzzle.gameTitle}</p>}{answer !== null && kind !== 'marathon' && <button className="primary" onClick={next}>Следующая задача</button>}{answer === true && kind === 'marathon' && <button className="primary" onClick={next}>Продолжить марафон</button>}</>} /></main>
 }
 
 function Result({ game, onHome, onDrills }: { game: Game; onHome: () => void; onDrills: () => void }) {
@@ -313,8 +367,13 @@ export function App() {
   if (screen.name === 'result') return <Result game={screen.game} onHome={() => setScreen({ name: 'home' })} onDrills={() => setScreen({ name: 'drills', game: screen.game })} />
   if (screen.name === 'drills') return <Drills game={screen.game} onExit={() => setScreen({ name: 'home' })} />
   if (screen.name === 'mistakes') return <Mistakes onExit={() => setScreen({ name: 'home' })} />
+  if (screen.name === 'puzzles') return <PuzzleMenu onExit={() => setScreen({ name: 'home' })} onStart={(queue, title, kind) => setScreen({ name: 'puzzleRun', queue, title, kind })} />
+  if (screen.name === 'puzzleRun') return <PuzzleRun {...screen} onHome={() => setScreen({ name: 'home' })} onAgain={(queue) => setScreen({ name: 'puzzleRun', queue, title: screen.title, kind: screen.kind === 'daily' ? 'random' : screen.kind })} />
   if (screen.name === 'intro') return <main className="shell"><button className="back" onClick={() => setScreen({ name: 'home' })}>← На главную</button><section className="hero intro"><span className="eyebrow">Урок · {screen.game.opening}</span><h1>{screen.game.title}</h1><p>{screen.game.intro}</p><div className="lesson-facts"><span>{screen.game.moments.filter((item) => item.kind === 'find').length} ходов для поиска</span><span>{screen.game.moments.length} разборов</span><span>{screen.game.drills.length} упражнений</span></div><button className="primary" onClick={() => setScreen({ name: 'lesson', game: screen.game })}>Начать урок</button></section></main>
   const mistakeCount = Object.values(store.mistakes).filter((task) => task.dueAt <= Date.now()).length
+  const today = dateKey()
+  const solvedToday = Object.values(store.puzzles).filter((stat) => dateKey(new Date(stat.lastAt)) === today && stat.lastResult === 'ok').length
+  const solvedTotal = Object.values(store.puzzles).filter((stat) => stat.solved > 0).length
   const gameWord = games.length % 10 === 1 && games.length % 100 !== 11 ? 'партия' : [2, 3, 4].includes(games.length % 10) && ![12, 13, 14].includes(games.length % 100) ? 'партии' : 'партий'
   const themeSections = [
     { theme: 'attack', title: 'Атака на короля' },
@@ -322,5 +381,5 @@ export function App() {
     { theme: 'endgame', title: 'Эндшпиль' },
   ] as const
   let gameNumber = 0
-  return <main className="shell"><header className="topbar"><span className="mark">♞</span><span>Шахматный тренер</span><span className="streak">🔥 {store.streak.count}</span></header><section className="hero"><span className="eyebrow">Классические партии</span><h1>Думай как чемпион</h1><p>Находи сильные ходы сам, разбирай ошибки и доигрывай позиции против компьютера.</p></section><section aria-labelledby="lessons-title"><div className="section-title"><h2 id="lessons-title">Твои уроки</h2><span>{games.length} {gameWord}</span></div>{themeSections.map(({ theme, title }) => { const themedGames = games.filter((game) => game.theme === theme); return <section className="theme-section" key={theme} aria-labelledby={`theme-${theme}`}><h3 id={`theme-${theme}`}>{title}</h3><div className="game-list">{themedGames.map((game) => { gameNumber += 1; const progress = store.progress[game.id]; const totalPly = gamePlyCount(game); return <button key={game.id} className="game-card" onClick={() => setScreen({ name: 'intro', game })}><span className="game-number">{String(gameNumber).padStart(2, '0')}</span><span className="game-copy"><strong>{game.title}</strong><small>{progress?.completedAt ? 'Пройдено' : progress ? 'В процессе' : `${game.opening} · уровень ${game.level}`}</small></span><span className="arrow">→</span><span className="progress-track"><span style={{ width: `${progress ? Math.round(progress.currentPly / totalPly * 100) : 0}%` }} /></span></button> })}</div></section> })}</section><button className="mistakes" onClick={() => setScreen({ name: 'mistakes' })}><span>Работа над ошибками {mistakeCount ? `· ${mistakeCount}` : ''}</span><small>{mistakeCount ? 'Повтори позиции, где было трудно' : 'Здесь появятся позиции, в которых ты ошибся'}</small></button></main>
+  return <main className="shell"><header className="topbar"><span className="mark">♞</span><span>Шахматный тренер</span><span className="streak">🔥 {store.streak.count}</span></header><section className="hero"><span className="eyebrow">Классические партии</span><h1>Думай как чемпион</h1><p>Находи сильные ходы сам, разбирай ошибки и доигрывай позиции против компьютера.</p></section><div className="home-tools"><button className="mistakes puzzles-entry" onClick={() => setScreen({ name: 'puzzles' })}><span>Задачи</span><small>Решено сегодня: {solvedToday} · всего решено {solvedTotal} из {puzzles.length}</small></button><button className="mistakes" onClick={() => setScreen({ name: 'mistakes' })}><span>Работа над ошибками {mistakeCount ? `· ${mistakeCount}` : ''}</span><small>{mistakeCount ? 'Повтори позиции, где было трудно' : 'Здесь появятся позиции, в которых ты ошибся'}</small></button></div><section aria-labelledby="lessons-title"><div className="section-title"><h2 id="lessons-title">Твои уроки</h2><span>{games.length} {gameWord}</span></div>{themeSections.map(({ theme, title }) => { const themedGames = games.filter((game) => game.theme === theme); return <section className="theme-section" key={theme} aria-labelledby={`theme-${theme}`}><h3 id={`theme-${theme}`}>{title}</h3><div className="game-list">{themedGames.map((game) => { gameNumber += 1; const progress = store.progress[game.id]; const totalPly = gamePlyCount(game); return <button key={game.id} className="game-card" onClick={() => setScreen({ name: 'intro', game })}><span className="game-number">{String(gameNumber).padStart(2, '0')}</span><span className="game-copy"><strong>{game.title}</strong><small>{progress?.completedAt ? 'Пройдено' : progress ? 'В процессе' : `${game.opening} · уровень ${game.level}`}</small></span><span className="arrow">→</span><span className="progress-track"><span style={{ width: `${progress ? Math.round(progress.currentPly / totalPly * 100) : 0}%` }} /></span></button> })}</div></section> })}</section></main>
 }

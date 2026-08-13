@@ -5,7 +5,7 @@ import { createInterface } from 'node:readline'
 import { Chess } from 'chess.js'
 import type { Game } from '../src/content/types'
 
-type Pv = { rank: number; cp: number; moves: string[] }
+type Pv = { rank: number; cp: number; mate: boolean; moves: string[] }
 const ENGINE_DEPTH = Number(process.env.ENGINE_DEPTH ?? 16)
 
 class NodeStockfish {
@@ -70,7 +70,7 @@ class NodeStockfish {
       const found = line.match(new RegExp(`^info depth ${depth} .*multipv (\\d+).* score (cp|mate) (-?\\d+).* pv (.+)$`))
       if (!found) continue
       const rank = Number(found[1]); const raw = Number(found[3])
-      results.set(rank, { rank, cp: found[2] === 'mate' ? Math.sign(raw) * 100_000 : raw, moves: found[4].trim().split(/\s+/) })
+      results.set(rank, { rank, cp: found[2] === 'mate' ? Math.sign(raw) * 100_000 : raw, mate: found[2] === 'mate', moves: found[4].trim().split(/\s+/) })
     }
     return [...results.values()].sort((a, b) => a.rank - b.rank)
   }
@@ -99,6 +99,9 @@ const engine = new NodeStockfish()
 let failures = 0
 const fail = (message: string) => { failures += 1; console.error(`  ✗ ${message}`) }
 const themeThreshold = { attack: 1.5, positional: 0.8, endgame: 0.6 } as const
+const pieceValue: Record<string, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 }
+const material = (chess: Chess, side: 'w' | 'b') => chess.board().flat().reduce((sum, piece) => sum + (piece && piece.color === side ? pieceValue[piece.type] : 0), 0)
+const balance = (chess: Chess, side: 'w' | 'b') => material(chess, side) - material(chess, side === 'w' ? 'b' : 'w')
 
 try {
   const terminal = new Chess()
@@ -142,8 +145,22 @@ try {
       const analysis = await engine.analyse(drill.fen, 2)
       const first = sanFromUci(drill.fen, analysis[0].moves[0])
       const gap = (analysis[0].cp - analysis[1].cp) / 100
-      console.log(`  упражнение ${index + 1}: ${first}, отрыв ${gap.toFixed(2)}`)
+      const before = new Chess(drill.fen)
+      const solver = before.turn()
+      const after = new Chess(drill.fen); after.move(drill.answerSan)
+      const replyAnalysis = after.isGameOver() ? [] : await engine.analyse(after.fen())
+      const afterReply = new Chess(after.fen())
+      if (replyAnalysis[0]?.moves[0]) afterReply.move({ from: replyAnalysis[0].moves[0].slice(0, 2), to: replyAnalysis[0].moves[0].slice(2, 4), promotion: replyAnalysis[0].moves[0][4] ?? 'q' })
+      const materialGain = balance(afterReply, solver) - balance(before, solver)
+      const sacrificed = material(afterReply, solver) < material(before, solver)
+      const pieceCount = before.board().flat().filter(Boolean).length
+      console.log(`  упражнение ${index + 1} [${drill.motif}]: ${first}, отрыв ${gap.toFixed(2)}`)
       if (clean(first) !== clean(drill.answerSan)) fail(`упражнение ${index + 1}: ответ ${drill.answerSan}, движок ${first}`)
+      if (drill.motif === 'mate' && !analysis[0].mate) fail(`упражнение ${index + 1}: motif mate, но оценка лучшего хода не матовая`)
+      if (drill.motif === 'sacrifice' && !sacrificed) fail(`упражнение ${index + 1}: motif sacrifice, но после лучшего ответа материал решающей стороны не уменьшился`)
+      if (drill.motif === 'sacrifice' && analysis[0].cp <= -100_000) fail(`упражнение ${index + 1}: motif sacrifice, но оценка не сохраняется за решающего`)
+      if (drill.motif === 'material' && materialGain < 2 && !/[x+#]/.test(drill.answerSan)) fail(`упражнение ${index + 1}: motif material, баланс улучшился на ${materialGain}, требуется не меньше 2`)
+      if (drill.motif === 'endgame' && pieceCount > 10) fail(`упражнение ${index + 1}: motif endgame, фигур ${pieceCount}, требуется не больше 10`)
       if (game.theme === 'endgame') {
         const changesResultClass = analysis[0].cp > 200 && analysis[1].cp < 50
         if (!changesResultClass) fail(`упражнение ${index + 1}: для эндшпиля лучший ход ${analysis[0].cp / 100}, второй ${analysis[1].cp / 100}; требуется >+2.0 и <+0.5`)

@@ -9,5 +9,5 @@
     "resolveJsonModule": true,
     "noEmit": true
   },
-  "include": ["vite.config.ts", "scripts", "src/content/types.ts", "src/content/games/*.json"]
+  "include": ["vite.config.ts", "scripts", "src/content/types.ts", "src/content/games/*.json", "src/puzzle-queue.ts"]
 }

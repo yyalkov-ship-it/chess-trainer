@@ -27,6 +27,22 @@ h2 { margin: 0; font-size: 22px; }
 .progress-track span { display: block; height: 100%; background: #e3bd7f; }
 .mistakes { display: grid; width: 100%; min-height: 66px; gap: 5px; margin-top: 18px; padding: 16px; text-align: left; color: #3f5342; border: 1px solid #d7d5cc; border-radius: 18px; background: #ffffff78; }
 .mistakes span { font-weight: 750; }.mistakes small { line-height: 1.35; }
+.home-tools { display: grid; gap: 10px; margin-bottom: 28px; }
+.home-tools .mistakes { margin-top: 0; }
+.puzzles-entry { color: #fff; border: 0; background: linear-gradient(135deg, #9b5f2b, #6f3c1d); }
+.level-filter { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; font-weight: 800; }
+.level-filter select { min-width: 120px; min-height: 44px; padding: 0 12px; border: 1px solid #b8c3b7; border-radius: 12px; background: #fff; font: inherit; }
+.mode-list { display: grid; gap: 10px; }
+.mode-list > button { display: grid; gap: 5px; min-height: 70px; padding: 15px; text-align: left; color: #fff; border: 0; border-radius: 18px; background: #22462b; }
+.mode-list small { color: #d6dfd5; }
+.motif-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.motif-list button { display: flex; align-items: center; justify-content: space-between; min-width: 0; min-height: 48px; padding: 8px 10px; color: #31523a; border: 1px solid #c9cdbf; border-radius: 12px; background: #ffffffa8; }
+.motif-list button:disabled { opacity: .45; }
+.puzzle-meta { display: flex; justify-content: space-between; gap: 8px; padding: 7px 12px 10px; color: #526456; font-size: 12px; }
+.puzzle-meta b { text-align: right; }
+.source-game { font-weight: 750; }
+.wrong-list { display: grid; gap: 8px; margin: 24px 0; }
+.wrong-list span { padding: 9px 10px; border-radius: 10px; background: #e3e2d8; font-size: 13px; }
 .back { min-height: 44px; padding: 0; border: 0; color: #31523a; background: transparent; font-weight: 750; }
 .lesson-facts { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0; }
 .lesson-facts span { padding: 8px 10px; border-radius: 99px; background: #e3e2d8; color: #465046; font-size: 13px; }
@@ -65,3 +81,5 @@ h2 { margin: 0; font-size: 22px; }
 @media (prefers-color-scheme: dark) { :root { color: #edf2ea; background: #111812; } body { background: radial-gradient(circle at 85% 0%, #273a29 0, transparent 35%), #111812; } .hero p, .section-title span { color: #aeb8ad; } .mistakes { color: #a6aea5; border-color: #344034; background: #1c251dcc; } .lesson-facts span { color: #cdd5cc; background: #293329; } .back { color: #a9c8ad; } }
 @media (prefers-color-scheme: dark) { .coach-card { border-color: #344034; background: #1c251df0; } .coach-card p { color: #bec7bc; } .coach-card .feedback { color: #dce7d8; background: #293c2b; } .lesson-nav button { color: #c9ddc8; border-color: #3c493d; background: #202b21; } .move-strip button { color: #bdc8ba; } }
 @media (prefers-color-scheme: dark) { .secondary, .play-actions button { color: #c9ddc8; border-color: #3c493d; background: #202b21; } .play-card select { color: #edf2ea; border-color: #3c493d; background: #202b21; } }
+@media (prefers-color-scheme: dark) { .level-filter select { color: #edf2ea; border-color: #3c493d; background: #202b21; } .motif-list button { color: #c9ddc8; border-color: #3c493d; background: #202b21; } .wrong-list span { background: #293329; } }
+@media (max-width: 390px) { .lesson-top.puzzle-top { gap: 6px; padding-inline: 8px; } .puzzle-meta { font-size: 11px; } .puzzle-top ~ .puzzle-meta + .board-wrap { width: calc(100% - 40px); margin-inline: auto; } .coach-card { min-height: 150px; margin-top: 8px; padding: 13px; } }

@@ -1,12 +1,17 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { Chess } from 'chess.js'
-import type { Game } from '../src/content/types'
+import type { DrillMotif, Game } from '../src/content/types'
 
 const directory = resolve('src/content/games')
 const files = readdirSync(directory).filter((name) => name.endsWith('.json')).sort()
 if (!files.length) throw new Error('В src/content/games нет партий')
 const games = files.map((file) => JSON.parse(readFileSync(resolve(directory, file), 'utf8')) as Game)
+const motifs = new Set<DrillMotif>(['mate', 'material', 'sacrifice', 'quiet', 'endgame', 'promotion'])
+const puzzleIds = games.flatMap((game) => game.drills.map((_, index) => `${game.id}#${index}`))
+const drillTotal = games.reduce((sum, game) => sum + game.drills.length, 0)
+if (puzzleIds.length !== drillTotal) throw new Error(`Пул задач: ${puzzleIds.length}, сумма упражнений: ${drillTotal}`)
+if (new Set(puzzleIds).size !== puzzleIds.length) throw new Error('Пул задач содержит повторяющиеся id')
 const positionKey = (fen: string) => fen.split(' ').slice(0, 4).join(' ')
 const sourceGames = new Map<string, { headers: Record<string, string>; moves: string[] }[]>()
 for (const sourceFile of readdirSync(resolve('src/content/sources')).filter((name) => name.endsWith('.pgn'))) {
@@ -116,6 +121,23 @@ function validate(game: Game) {
     if (owner && owner !== game.id) fail(`упражнение ${index + 1}: FEN уже используется в уроке ${owner}`)
     drillOwner.set(key, game.id)
     assertLegal(position, drill.answerSan, `упражнение ${index + 1}, ответ`)
+    if (!motifs.has(drill.motif)) fail(`упражнение ${index + 1}: motif ${String(drill.motif)} не входит в перечисление`)
+    const isPromotion = drill.answerSan.includes('=')
+    const isMate = drill.answerSan.endsWith('#')
+    const isCapture = drill.answerSan.includes('x')
+    const isCheck = /[+#]$/.test(drill.answerSan)
+    if (drill.motif === 'promotion' && !isPromotion) fail(`упражнение ${index + 1}: motif promotion требует превращения в answerSan`)
+    if (drill.motif === 'quiet' && (isCapture || isCheck || isPromotion)) fail(`упражнение ${index + 1}: motif quiet противоречит ходу ${drill.answerSan}: ход является взятием, шахом или превращением`)
+    const afterAnswer = new Chess(drill.fen); afterAnswer.move(drill.answerSan)
+    const solverPieces = afterAnswer.board().flat().filter((piece) => piece?.color === drill.side).length
+    const hasImmediateMaterialThreat = afterAnswer.moves().some((san) => {
+      const reply = new Chess(afterAnswer.fen()); reply.move(san)
+      return reply.board().flat().filter((piece) => piece?.color === drill.side).length < solverPieces
+    })
+    if ((drill.motif === 'material' || drill.motif === 'sacrifice') && !(isCapture || isCheck || hasImmediateMaterialThreat)) fail(`упражнение ${index + 1}: motif ${drill.motif} требует взятия, шаха или немедленной угрозы`)
+    if (drill.motif === 'mate' && !isMate) {
+      // Мат в несколько ходов подтверждается обязательным движковым валидатором.
+    }
   }
   console.log(`✓ ${game.title}: ${history.length} полуходов, ${game.moments.length} моментов, ${game.drills.length} упражнений`)
 }
