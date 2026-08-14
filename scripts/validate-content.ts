@@ -8,11 +8,27 @@ const files = readdirSync(directory).filter((name) => name.endsWith('.json')).so
 if (!files.length) throw new Error('В src/content/games нет партий')
 const games = files.map((file) => JSON.parse(readFileSync(resolve(directory, file), 'utf8')) as Game)
 const motifs = new Set<DrillMotif>(['mate', 'material', 'sacrifice', 'quiet', 'endgame', 'promotion', 'attack'])
+const bannedPromptSubstrings = [
+  'мотив',
+  'уровень',
+  'задачу на',
+  'выигрыш материала',
+  'форсированный ход',
+  'тихий ход',
+  'эндшпильную задачу',
+  'превращение пешки',
+  'жертва',
+  'жертву',
+  'мат в',
+]
+const templatePrompt = /сейчас \d+-й ход: найди продолжение/u
 const puzzleIds = games.flatMap((game) => game.drills.map((_, index) => `${game.id}#${index}`))
 const drillTotal = games.reduce((sum, game) => sum + game.drills.length, 0)
 if (puzzleIds.length !== drillTotal) throw new Error(`Пул задач: ${puzzleIds.length}, сумма упражнений: ${drillTotal}`)
 if (new Set(puzzleIds).size !== puzzleIds.length) throw new Error('Пул задач содержит повторяющиеся id')
 const positionKey = (fen: string) => fen.split(' ').slice(0, 4).join(' ')
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const sanWordRegExp = (san: string) => new RegExp(`(?<![\\p{L}\\p{N}_+#=\\-])${escapeRegExp(san)}(?![\\p{L}\\p{N}_+#=\\-])`, 'u')
 const sourceGames = new Map<string, { headers: Record<string, string>; moves: string[] }[]>()
 for (const sourceFile of readdirSync(resolve('src/content/sources')).filter((name) => name.endsWith('.pgn'))) {
   const source = readFileSync(resolve('src/content/sources', sourceFile), 'utf8')
@@ -24,6 +40,7 @@ for (const sourceFile of readdirSync(resolve('src/content/sources')).filter((nam
   sourceGames.set(sourceFile, parsedGames)
 }
 const drillOwner = new Map<string, string>()
+const drillPromptOwner = new Map<string, { gameId: string; index: number }>()
 const drillSets = new Map<string, string>()
 for (const game of games) validate(game)
 
@@ -131,6 +148,14 @@ function validate(game: Game) {
     const oppositeSidePrompt = drill.side === 'w' ? 'Ход чёрных' : 'Ход белых'
     if (!drill.prompt.includes(sidePrompt)) fail(`упражнение ${index + 1}: prompt должен содержать «${sidePrompt}»`)
     if (drill.prompt.includes(oppositeSidePrompt)) fail(`упражнение ${index + 1}: prompt содержит неверную сторону «${oppositeSidePrompt}»`)
+    const promptOwner = drillPromptOwner.get(drill.prompt)
+    if (promptOwner) fail(`упражнение ${index + 1}: prompt дублирует ${promptOwner.gameId}, упражнение ${promptOwner.index + 1}`)
+    drillPromptOwner.set(drill.prompt, { gameId: game.id, index })
+    const loweredPrompt = drill.prompt.toLocaleLowerCase('ru-RU')
+    const bannedPromptSubstring = bannedPromptSubstrings.find((item) => loweredPrompt.includes(item))
+    if (bannedPromptSubstring) fail(`упражнение ${index + 1}: prompt содержит запрещённую подстроку «${bannedPromptSubstring}»`)
+    if (templatePrompt.test(drill.prompt)) fail(`упражнение ${index + 1}: prompt содержит шаблон «сейчас N-й ход: найди продолжение»`)
+    if (sanWordRegExp(drill.answerSan).test(drill.prompt)) fail(`упражнение ${index + 1}: prompt содержит answerSan «${drill.answerSan}» отдельным словом`)
     const afterAnswer = new Chess(drill.fen); afterAnswer.move(drill.answerSan)
     const solverPieces = afterAnswer.board().flat().filter((piece) => piece?.color === drill.side).length
     const hasImmediateMaterialThreat = afterAnswer.moves().some((san) => {
