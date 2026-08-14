@@ -29,6 +29,7 @@ if (new Set(puzzleIds).size !== puzzleIds.length) throw new Error('Пул зад
 const positionKey = (fen: string) => fen.split(' ').slice(0, 4).join(' ')
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const sanWordRegExp = (san: string) => new RegExp(`(?<![\\p{L}\\p{N}_+#=\\-])${escapeRegExp(san)}(?![\\p{L}\\p{N}_+#=\\-])`, 'u')
+const squareTokenRegExp = (square: string) => new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRegExp(square)}(?![\\p{L}\\p{N}_])`, 'iu')
 const sourceGames = new Map<string, { headers: Record<string, string>; moves: string[] }[]>()
 for (const sourceFile of readdirSync(resolve('src/content/sources')).filter((name) => name.endsWith('.pgn'))) {
   const source = readFileSync(resolve('src/content/sources', sourceFile), 'utf8')
@@ -156,7 +157,8 @@ function validate(game: Game) {
     if (bannedPromptSubstring) fail(`упражнение ${index + 1}: prompt содержит запрещённую подстроку «${bannedPromptSubstring}»`)
     if (templatePrompt.test(drill.prompt)) fail(`упражнение ${index + 1}: prompt содержит шаблон «сейчас N-й ход: найди продолжение»`)
     if (sanWordRegExp(drill.answerSan).test(drill.prompt)) fail(`упражнение ${index + 1}: prompt содержит answerSan «${drill.answerSan}» отдельным словом`)
-    const afterAnswer = new Chess(drill.fen); afterAnswer.move(drill.answerSan)
+    const afterAnswer = new Chess(drill.fen); const answerMove = afterAnswer.move(drill.answerSan)
+    if (squareTokenRegExp(answerMove.to).test(drill.prompt)) fail(`упражнение ${index + 1}: prompt содержит поле назначения ответа «${answerMove.to}» отдельным токеном`)
     const solverPieces = afterAnswer.board().flat().filter((piece) => piece?.color === drill.side).length
     const hasImmediateMaterialThreat = afterAnswer.moves().some((san) => {
       const reply = new Chess(afterAnswer.fen()); reply.move(san)
